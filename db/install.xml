@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<XMLDB PATH="report/ai_analysis/db" VERSION="20251023" COMMENT="XMLDB file for Moodle report/ai_analysis"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd"
+>
+  <TABLES>
+    <TABLE NAME="report_ai_analysis_reports" COMMENT="Stores AI analysis reports">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="contextid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="title" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="scope_details" TYPE="text" NOTNULL="true" SEQUENCE="false" COMMENT="JSON scope configuration"/>
+        <FIELD NAME="prompt" TYPE="text" NOTNULL="true" SEQUENCE="false" COMMENT="User analysis prompt"/>
+        <FIELD NAME="ai_model_name" TYPE="char" LENGTH="100" NOTNULL="false" SEQUENCE="false" COMMENT="AI model name from response"/>
+        <FIELD NAME="status" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="pending" SEQUENCE="false" COMMENT="pending, running, completed, failed, cancelled"/>
+        <FIELD NAME="ai_result" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="AI generated analysis result"/>
+        <FIELD NAME="raw_data" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Raw conversation data analyzed"/>
+        <FIELD NAME="error_message" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="error_code" TYPE="char" LENGTH="50" NOTNULL="false" SEQUENCE="false" COMMENT="Classified error code"/>
+        <FIELD NAME="execution_time" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Execution time in seconds"/>
+        <FIELD NAME="token_usage" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Total tokens used"/>
+        <FIELD NAME="retry_count" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Creator user ID"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timecompleted" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="contextid" TYPE="foreign" FIELDS="contextid" REFTABLE="context" REFFIELDS="id"/>
+        <KEY NAME="userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="status" UNIQUE="false" FIELDS="status"/>
+        <INDEX NAME="contextid_status" UNIQUE="false" FIELDS="contextid, status"/>
+        <INDEX NAME="timecreated" UNIQUE="false" FIELDS="timecreated"/>
+      </INDEXES>
+    </TABLE>
+  </TABLES>
+</XMLDB>

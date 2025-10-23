@@ -1,0 +1,174 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template report_ai_analysis/view
+
+    View page template for AI analysis report.
+
+    Context variables required for this template:
+    * title - Report title
+    * status - Status code
+    * statustext - Human readable status
+    * statusbadgeclass - CSS class for status badge
+    * contextname - Context name
+    * timecreated - Creation date
+    * creator - Creator name
+    * scopedetails - Scope description
+    * prompt - Analysis prompt
+    * haveresult - Whether result is available
+    * airesult - AI analysis result (if available)
+    * aimodel - AI model used
+    * duration - Execution duration
+    * tokenusage - Token usage
+    * retries - Number of retries
+    * timecompleted - Completion time
+    * haserror - Whether there was an error
+    * errormessage - Error message (if failed)
+    * errorcode - Error code (if failed)
+    * canviewrawdata - Whether user can view raw data
+    * rawdata - Raw conversation data (if permitted)
+    * candelete - Whether user can delete
+    * canrerun - Whether user can rerun
+    * canedit - Whether user can edit
+    * deleteurl - URL to delete report
+    * rerunurl - URL to rerun report
+    * editurl - URL to edit report
+    * indexurl - URL back to index
+}}
+
+<div class="report-ai-analysis-view">
+    <div class="mb-3">
+        <a href="{{{indexurl}}}" class="btn btn-secondary">
+            &larr; {{#str}}back{{/str}}
+        </a>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header">
+            <h3 class="mb-0">{{title}}</h3>
+            <span class="{{{statusbadgeclass}}}">{{statustext}}</span>
+        </div>
+        <div class="card-body">
+            <dl class="row">
+                <dt class="col-sm-3">{{#str}}context_system, report_ai_analysis{{/str}}</dt>
+                <dd class="col-sm-9">{{contextname}}</dd>
+
+                <dt class="col-sm-3">{{#str}}created, report_ai_analysis{{/str}}</dt>
+                <dd class="col-sm-9">{{timecreated}}</dd>
+
+                <dt class="col-sm-3">{{#str}}report_creator, report_ai_analysis{{/str}}</dt>
+                <dd class="col-sm-9">{{creator}}</dd>
+
+                <dt class="col-sm-3">{{#str}}scope, report_ai_analysis{{/str}}</dt>
+                <dd class="col-sm-9">{{scopedetails}}</dd>
+            </dl>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header">
+            <h4>{{#str}}prompt, report_ai_analysis{{/str}}</h4>
+        </div>
+        <div class="card-body">
+            <div class="prompt-text">{{{prompt}}}</div>
+        </div>
+    </div>
+
+    {{#haveresult}}
+    <div class="card mb-3">
+        <div class="card-header">
+            <h4>{{#str}}analysis_result, report_ai_analysis{{/str}}</h4>
+        </div>
+        <div class="card-body">
+            <div class="ai-result">{{{airesult}}}</div>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header">
+            <h5>{{#str}}metadata, report_ai_analysis{{/str}}</h5>
+        </div>
+        <div class="card-body">
+            <dl class="row">
+                <dt class="col-sm-3">{{#str}}aimodel, report_ai_analysis{{/str}}</dt>
+                <dd class="col-sm-9">{{aimodel}}</dd>
+
+                <dt class="col-sm-3">{{#str}}duration, report_ai_analysis{{/str}}</dt>
+                <dd class="col-sm-9">{{duration}}</dd>
+
+                <dt class="col-sm-3">{{#str}}tokenusage, report_ai_analysis{{/str}}</dt>
+                <dd class="col-sm-9">{{tokenusage}}</dd>
+
+                <dt class="col-sm-3">{{#str}}retries, report_ai_analysis{{/str}}</dt>
+                <dd class="col-sm-9">{{retries}}</dd>
+
+                <dt class="col-sm-3">{{#str}}timecompleted, report_ai_analysis{{/str}}</dt>
+                <dd class="col-sm-9">{{timecompleted}}</dd>
+            </dl>
+        </div>
+    </div>
+    {{/haveresult}}
+
+    {{#haserror}}
+    <div class="alert alert-danger">
+        <h5>{{#str}}error, moodle{{/str}}</h5>
+        <p><strong>{{errorcode}}</strong>: {{errormessage}}</p>
+    </div>
+    {{/haserror}}
+
+    {{#canviewrawdata}}
+    {{#rawdata}}
+    <div class="card mb-3">
+        <div class="card-header">
+            <h5>{{#str}}raw_data, report_ai_analysis{{/str}}</h5>
+        </div>
+        <div class="card-body">
+            <pre class="raw-data">{{{rawdata}}}</pre>
+        </div>
+    </div>
+    {{/rawdata}}
+    {{/canviewrawdata}}
+
+    <div class="mb-3">
+        <div class="btn-group" role="group">
+            {{#canedit}}
+            <a href="{{{editurl}}}" class="btn btn-primary">
+                {{#str}}edit, report_ai_analysis{{/str}}
+            </a>
+            {{/canedit}}
+            {{#canrerun}}
+            <a href="{{{rerunurl}}}" class="btn btn-warning">
+                {{#str}}rerun, report_ai_analysis{{/str}}
+            </a>
+            {{/canrerun}}
+            {{#candelete}}
+            <a href="{{{deleteurl}}}" class="btn btn-danger" onclick="return confirm('{{#str}}confirmdeletion, report_ai_analysis{{/str}}');">
+                {{#str}}delete, report_ai_analysis{{/str}}
+            </a>
+            {{/candelete}}
+        </div>
+
+        <div class="btn-group ml-2" role="group">
+            <a href="{{{exportjsonurl}}}" class="btn btn-secondary">
+                <i class="icon fa fa-download"></i> {{#str}}exportjson, report_ai_analysis{{/str}}
+            </a>
+            <a href="{{{exporthtmlurl}}}" class="btn btn-secondary">
+                <i class="icon fa fa-file-code-o"></i> {{#str}}exporthtml, report_ai_analysis{{/str}}
+            </a>
+        </div>
+    </div>
+</div>
