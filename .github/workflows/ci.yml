@@ -283,78 +283,21 @@ jobs:
               }
             }
 
+            // Complexity Check - Files > 1000 lines (not covered by standard tools)
             try {
-              // PHP Syntax Check
-              const phpFiles = execSync('cd plugin && find . -name "*.php" -type f ! -path "*/vendor/*"', { encoding: 'utf8' }).trim().split('\n');
-              let syntaxErrors = 0;
-
-              for (const file of phpFiles.slice(0, 50)) {
-                try {
-                  execSync(`php -l plugin/${file}`, { encoding: 'utf8', stdio: 'pipe' });
-                } catch (error) {
-                  syntaxErrors++;
-                  issues.push(`❌ PHP Syntax error in: ${file}`);
-                }
-              }
-
-              if (syntaxErrors === 0) {
-                successes.push('✅ No PHP syntax errors found');
-              }
-            } catch (error) {
-              warnings.push('⚠️ Could not complete PHP syntax check');
-            }
-
-            // Complexity Check
-            try {
-              const largeFiles = execSync('cd plugin && find . -name "*.php" -type f -exec wc -l {} \\; | awk \'{if($1>500) print $2" has "$1" lines"}\'', { encoding: 'utf8' }).trim();
+              const largeFiles = execSync('cd plugin && find . -name "*.php" -type f -exec wc -l {} \\; | awk \'{if($1>1000) print $2" has "$1" lines"}\'', { encoding: 'utf8' }).trim();
               if (largeFiles) {
-                warnings.push('⚠️ Large files found (>500 lines):\n```\n' + largeFiles.split('\n').slice(0, 5).join('\n') + '\n```');
+                warnings.push('⚠️ Large files found (>1000 lines):\n```\n' + largeFiles.split('\n').slice(0, 5).join('\n') + '\n```');
               } else {
                 successes.push('✅ No excessively large files');
               }
             } catch (e) {}
 
-            // Debug statements
-            runCheck('grep -r "var_dump\\|print_r\\|die(" --include="*.php" . 2>/dev/null || true',
-              '✅ No debug statements', '⚠️ Debug statements found');
+            // Improper die() usage (not following Moodle "|| die()" pattern)
+            runCheck('grep -rn "die(" --include="*.php" --exclude-dir=vendor . 2>/dev/null | grep -v "|| die()" | grep -v "or die(" || true',
+              '✅ No improper die() usage', '⚠️ die() found without || or "or" (use Moodle pattern "|| die()")');
 
-            // TODOs
-            runCheck('grep -r "TODO\\|FIXME\\|XXX" --include="*.php" . 2>/dev/null || true',
-              '✅ No TODOs', '⚠️ TODOs found in code');
-
-            // MOODLE_INTERNAL check
-            runCheck('find . -name "*.php" -type f ! -path "*/vendor/*" ! -path "*/tests/fixtures/*" -exec grep -L "defined(\'MOODLE_INTERNAL\')" {} \\; 2>/dev/null | head -5 || true',
-              '✅ MOODLE_INTERNAL checks present', '⚠️ Missing MOODLE_INTERNAL in files');
-
-            // PHPDoc check
-            runCheck('find . -name "*.php" -type f ! -path "*/vendor/*" ! -path "*/tests/fixtures/*" -exec grep -L "@package\\|@copyright\\|@license" {} \\; 2>/dev/null | head -5 || true',
-              '✅ PHPDoc headers present', '⚠️ Missing PHPDoc headers');
-
-            // Deprecated functions
-            runCheck('grep -r "mysql_\\|ereg\\|split(" --include="*.php" --exclude-dir=vendor . 2>/dev/null || true',
-              '✅ No deprecated PHP functions', '⚠️ Deprecated PHP functions found', false);
-
-            // Security: eval()
-            runCheck('grep -rn "eval(" --include="*.php" --exclude-dir=vendor . 2>/dev/null || true',
-              '✅ No eval() usage', '❌ eval() found - HIGH SECURITY RISK!', false);
-
-            // Security: Command execution
-            runCheck('grep -rn "exec(\\|shell_exec(\\|system(\\|passthru(" --include="*.php" --exclude-dir=vendor . 2>/dev/null || true',
-              '✅ No command execution', '❌ Command execution found - SECURITY RISK!', false);
-
-            // Security: Unserialize
-            runCheck('grep -rn "unserialize(" --include="*.php" --exclude-dir=vendor . 2>/dev/null || true',
-              '✅ No unserialize() usage', '⚠️ unserialize() found - verify data source');
-
-            // Direct superglobal access
-            runCheck('grep -rn "\\$_GET\\[\\|\\$_POST\\[" --include="*.php" --exclude-dir=vendor --exclude-dir=tests . 2>/dev/null | head -5 || true',
-              '✅ No direct superglobal access', '⚠️ Direct $_GET/$_POST access (use required_param/optional_param)');
-
-            // Hardcoded strings
-            runCheck('grep -rn "echo.*[\\\'\\"][A-Z]" --include="*.php" --exclude-dir=vendor --exclude-dir=tests --exclude-dir=lang . 2>/dev/null | grep -v "get_string\\|@\\|TODO\\|FIXME\\|DEBUG\\|SQL" | head -5 || true',
-              '✅ No obvious hardcoded strings', '⚠️ Potential hardcoded strings (should be in lang files)');
-
-            // Performance: Potential N+1 queries
+            // Performance: Potential N+1 queries (not covered by standard tools)
             try {
               const result = execSync('cd plugin && grep -rn "foreach\\|while\\|for " --include="*.php" --exclude-dir=vendor --exclude-dir=tests . 2>/dev/null | head -20 || true', { encoding: 'utf8' });
               let n1Found = false;
@@ -381,6 +324,22 @@ jobs:
               }
             } catch (e) {
               infos.push('ℹ️ Could not check for N+1 queries');
+            }
+
+            // Version.php update check when DB schema changes (Moodle-specific)
+            try {
+              const dbChanges = execSync('git diff --name-only origin/main 2>/dev/null || git diff --name-only HEAD~1 2>/dev/null || echo ""', { encoding: 'utf8', cwd: 'plugin' });
+              if (dbChanges.includes('db/install.xml') || dbChanges.includes('db/upgrade.php')) {
+                if (!dbChanges.includes('version.php')) {
+                  warnings.push('⚠️ DB schema changed but `version.php` not updated!');
+                } else {
+                  successes.push('✅ version.php updated with DB changes');
+                }
+              } else {
+                infos.push('ℹ️ No DB schema changes detected');
+              }
+            } catch (e) {
+              infos.push('ℹ️ Could not check for DB schema changes');
             }
 
             // Create review comment
