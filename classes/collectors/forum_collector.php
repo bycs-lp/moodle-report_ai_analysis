@@ -338,11 +338,15 @@ class forum_collector {
         $output[] = get_string('export_total_discussions', 'report_ai_analysis') . ": " . count($discussions) . "\n\n";
 
         foreach ($discussions as $discussion) {
-            $output[] = "--- " . get_string('export_discussion', 'report_ai_analysis') . ": " . $discussion['discussionname'] . " ---";
+            $output[] = "--- " . get_string('export_discussion', 'report_ai_analysis') .
+                        ": " . $discussion['discussionname'] . " ---";
             $output[] = get_string('export_forum', 'report_ai_analysis') . ": " . $discussion['forumname'];
-            $output[] = get_string('export_course', 'report_ai_analysis') . ": " . $discussion['coursename'] . " (" . $discussion['courseshortname'] . ")";
-            $output[] = get_string('export_started_by', 'report_ai_analysis') . ": " . $discussion['startername'] . " (ID: " . $discussion['starterid'] . ")";
-            $output[] = get_string('export_modified', 'report_ai_analysis') . ": " . userdate($discussion['timemodified'], '%Y-%m-%d %H:%M:%S');
+            $output[] = get_string('export_course', 'report_ai_analysis') . ": " .
+                        $discussion['coursename'] . " (" . $discussion['courseshortname'] . ")";
+            $output[] = get_string('export_started_by', 'report_ai_analysis') . ": " .
+                        $discussion['startername'] . " (ID: " . $discussion['starterid'] . ")";
+            $output[] = get_string('export_modified', 'report_ai_analysis') . ": " .
+                        userdate($discussion['timemodified'], '%Y-%m-%d %H:%M:%S');
             $output[] = get_string('export_posts', 'report_ai_analysis') . ": " . $discussion['postcount'];
             $output[] = "";
 

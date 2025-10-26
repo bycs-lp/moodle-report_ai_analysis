@@ -211,9 +211,12 @@ class conversation_collector {
         $output[] = get_string('export_total_conversations', 'report_ai_analysis') . ": " . count($conversations) . "\n\n";
 
         foreach ($conversations as $thread) {
-            $output[] = "--- " . get_string('export_conversation_thread', 'report_ai_analysis') . " #" . $thread['threadid'] . " ---";
-            $output[] = get_string('export_user', 'report_ai_analysis') . ": " . $thread['username'] . " (ID: " . $thread['userid'] . ")";
-            $output[] = get_string('export_created', 'report_ai_analysis') . ": " . userdate($thread['timecreated'], '%Y-%m-%d %H:%M:%S');
+            $output[] = "--- " . get_string('export_conversation_thread', 'report_ai_analysis') .
+                        " #" . $thread['threadid'] . " ---";
+            $output[] = get_string('export_user', 'report_ai_analysis') . ": " .
+                        $thread['username'] . " (ID: " . $thread['userid'] . ")";
+            $output[] = get_string('export_created', 'report_ai_analysis') . ": " .
+                        userdate($thread['timecreated'], '%Y-%m-%d %H:%M:%S');
             $output[] = get_string('export_context_id', 'report_ai_analysis') . ": " . $thread['contextid'];
             $output[] = get_string('export_messages', 'report_ai_analysis') . ": " . count($thread['messages']);
             $output[] = "";

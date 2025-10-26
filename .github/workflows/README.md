@@ -54,16 +54,20 @@ After the Pre-Code Review, standard tests run:
 
 Tests run on the following combinations:
 
-- **PHP Versions:** 8.1, 8.2, 8.3
-- **Moodle Branches:** 
-  - MOODLE_403_STABLE
-  - MOODLE_404_STABLE
-  - MOODLE_405_STABLE
-  - MOODLE_500_STABLE
-  - MOODLE_501_STABLE
+- **PHP Versions:** 8.2, 8.3
+  - PHP 8.2: Compatible with Moodle 4.5 only
+  - PHP 8.3: Compatible with all Moodle versions (4.5, 5.0, 5.1)
+- **Moodle Branches:**
+  - MOODLE_405_STABLE (Moodle 4.5)
+  - MOODLE_500_STABLE (Moodle 5.0)
+  - MOODLE_501_STABLE (Moodle 5.1)
 - **Databases:** PostgreSQL 17, MariaDB 10.11
 
-**Total:** 30 test combinations (3 × 5 × 2)
+**Total:** 8 test combinations
+- PHP 8.2 × Moodle 4.5 × 2 DBs = 2 combinations
+- PHP 8.3 × Moodle 4.5/5.0/5.1 × 2 DBs = 6 combinations
+
+**Note:** PHP 8.1 is excluded as modern test dependencies (Symfony 7, PHPUnit 11) require PHP 8.2+
 
 ## Dependencies
 
@@ -119,7 +123,7 @@ The automatic comment is created only for **one** matrix combination:
 - MOODLE_501_STABLE
 - PostgreSQL
 
-This prevents 30 identical comments in the PR.
+This prevents multiple identical comments in the PR.
 
 ### Fail-Fast Disabled
 The matrix has `fail-fast: false`, so all combinations are tested even if one fails.
