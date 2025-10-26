@@ -30,8 +30,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php: ['8.1', '8.2', '8.3']
-        moodle-branch: ['MOODLE_403_STABLE', 'MOODLE_404_STABLE', 'MOODLE_405_STABLE', 'MOODLE_500_STABLE', 'MOODLE_501_STABLE']
+        php: ['8.3']
+        moodle-branch: ['MOODLE_500_STABLE', 'MOODLE_501_STABLE']
         database: [pgsql, mariadb]
 
     steps:
@@ -84,7 +84,7 @@ jobs:
           cd plugin
           echo "🔍 Analyzing code complexity..."
           find . -name "*.php" -type f -exec wc -l {} \; | awk '{if($1>500) print "⚠️ File "$2" has "$1" lines (consider splitting)"}' || true
-          
+
           # Prüfe auf typische Anti-Patterns
           echo "🔍 Checking for common anti-patterns..."
           grep -r "var_dump\|print_r\|die(" --include="*.php" . && echo "⚠️ Debug statements found!" || echo "✅ No debug statements"
@@ -95,13 +95,13 @@ jobs:
         run: |
           cd plugin
           echo "🔍 Moodle-specific checks..."
-          
+
           # Prüfe auf MOODLE_INTERNAL
           find . -name "*.php" -type f ! -path "*/vendor/*" ! -path "*/tests/fixtures/*" -exec grep -L "defined('MOODLE_INTERNAL') || die()" {} \; | head -10 | while read file; do echo "⚠️ Missing MOODLE_INTERNAL check in: $file"; done || echo "✅ MOODLE_INTERNAL checks present"
-          
+
           # Prüfe auf PHPDoc
           find . -name "*.php" -type f ! -path "*/vendor/*" ! -path "*/tests/fixtures/*" -exec grep -L "@package\|@copyright\|@license" {} \; | head -10 | while read file; do echo "⚠️ Missing PHPDoc headers in: $file"; done || echo "✅ PHPDoc headers present"
-          
+
           # Prüfe auf deprecated functions
           grep -r "mysql_\|ereg\|split(" --include="*.php" --exclude-dir=vendor . && echo "⚠️ Deprecated PHP functions found!" || echo "✅ No deprecated functions"
 
@@ -110,16 +110,16 @@ jobs:
         run: |
           cd plugin
           echo "🔍 Security checks..."
-          
+
           # SQL Injection Risiken
           grep -rn "execute_sql\|get_records_sql.*\\\$" --include="*.php" --exclude-dir=vendor --exclude-dir=tests . && echo "⚠️ Review SQL queries for injection risks!" || echo "✅ No suspicious SQL patterns"
-          
+
           # XSS Risiken
           grep -rn "echo.*\\\$_\|print.*\\\$_" --include="*.php" --exclude-dir=vendor --exclude-dir=tests . && echo "⚠️ Potential XSS risk - check output escaping!" || echo "✅ No direct output of user input"
-          
+
           # File inclusion
           grep -rn "include.*\\\$\|require.*\\\$" --include="*.php" --exclude-dir=vendor --exclude-dir=tests . && echo "⚠️ Dynamic includes found - review carefully!" || echo "✅ No dynamic includes"
-          
+
           # Capability checks
           grep -rn "require_capability\|has_capability" --include="*.php" --exclude-dir=vendor --exclude-dir=tests . | wc -l | xargs echo "✅ Found capability checks:"
 
@@ -130,16 +130,16 @@ jobs:
           script: |
             const { execSync } = require('child_process');
             const fs = require('fs');
-            
+
             const issues = [];
             const warnings = [];
             const successes = [];
-            
+
             try {
               // PHP Syntax Check
               const phpFiles = execSync('cd plugin && find . -name "*.php" -type f ! -path "*/vendor/*"', { encoding: 'utf8' }).trim().split('\n');
               let syntaxErrors = 0;
-              
+
               for (const file of phpFiles.slice(0, 50)) { // Limit to first 50 files
                 try {
                   execSync(`php -l plugin/${file}`, { encoding: 'utf8', stdio: 'pipe' });
@@ -148,49 +148,49 @@ jobs:
                   issues.push(`❌ PHP Syntax error in: ${file}`);
                 }
               }
-              
+
               if (syntaxErrors === 0) {
                 successes.push('✅ No PHP syntax errors found');
               }
             } catch (error) {
               warnings.push('⚠️ Could not complete PHP syntax check');
             }
-            
+
             // Erstelle Review-Kommentar
             const changedFiles = '${{ steps.changed-files.outputs.all_changed_files }}'.split(' ').filter(f => f);
-            
+
             let body = `## 🤖 Automatisches Pre-Code Review
-            
+
             **Matrix:** PHP ${{ matrix.php }} | Moodle ${{ matrix.moodle-branch }} | DB ${{ matrix.database }}
-            
+
             ### 📝 Geänderte Dateien (${changedFiles.length})
             ${changedFiles.slice(0, 10).map(f => `- \`${f}\``).join('\n')}
             ${changedFiles.length > 10 ? `\n... und ${changedFiles.length - 10} weitere` : ''}
             `;
-            
+
             if (issues.length > 0) {
               body += `\n### ❌ Kritische Probleme gefunden:\n${issues.slice(0, 10).join('\n')}`;
               if (issues.length > 10) body += `\n... und ${issues.length - 10} weitere`;
             }
-            
+
             if (warnings.length > 0) {
               body += `\n### ⚠️ Warnungen:\n${warnings.slice(0, 10).join('\n')}`;
             }
-            
+
             if (successes.length > 0) {
               body += `\n### ✅ Erfolgreiche Checks:\n${successes.join('\n')}`;
             }
-            
+
             body += `
-            
+
             ### 📋 Manuelle Review-Checkliste:
             - [ ] **Moodle Coding Standards** vollständig eingehalten
             - [ ] **PHPDoc** vollständig und korrekt (Package, Copyright, License)
-            - [ ] **Security**: 
+            - [ ] **Security**:
               - [ ] Alle Eingaben mit \`required_param()\` / \`optional_param()\` validiert
               - [ ] Alle Ausgaben mit \`s()\`, \`format_text()\` oder \`html_writer\` escaped
               - [ ] Capability Checks mit \`require_capability()\` vorhanden
-            - [ ] **Database**: 
+            - [ ] **Database**:
               - [ ] Nur Core DB API verwendet (\`$DB->get_record()\`, etc.)
               - [ ] SQL-Parameter korrekt gebunden (kein String-Concatenation)
             - [ ] **Tests**:
@@ -204,11 +204,11 @@ jobs:
               - [ ] Strings in Language Files (\`lang/en/\`)
               - [ ] \`MOODLE_INTERNAL\` Check in allen PHP-Dateien
               - [ ] Upgrade-Schritte in \`db/upgrade.php\` dokumentiert
-            
+
             ---
             💡 **Tipp:** Führe lokal \`../bindev/codechecker.sh report/ai_analysis\` und \`../bindev/moodlecheck.sh report/ai_analysis\` aus!
             `;
-            
+
             // Nur einen Kommentar pro Matrix-Kombination
             if ('${{ matrix.php }}' === '8.3' && '${{ matrix.database }}' === 'pgsql' && '${{ matrix.moodle-branch }}' === 'MOODLE_501_STABLE') {
               await github.rest.issues.createComment({

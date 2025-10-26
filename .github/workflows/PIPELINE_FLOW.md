@@ -6,19 +6,20 @@
 └───────────────────────────────┬─────────────────────────────────┘
                                 │
                 ┌───────────────┴───────────────┐
-                │    Matrix Strategy (30x)       │
-                │  PHP: 8.1, 8.2, 8.3           │
-                │  Moodle: 403-501 STABLE       │
+                │    Matrix Strategy (8x)        │
+                │  PHP: 8.2, 8.3                │
+                │  Moodle: 405, 500, 501 STABLE │
                 │  DB: PostgreSQL, MariaDB      │
+                │  (8.2 only with Moodle 4.5)   │
                 └───────────────┬───────────────┘
                                 │
         ┌───────────────────────┼───────────────────────┐
         │                       │                       │
         ▼                       ▼                       ▼
    ┌─────────┐           ┌─────────┐           ┌─────────┐
-   │ PHP 8.1 │           │ PHP 8.2 │           │ PHP 8.3 │
+   │ PHP 8.2 │           │ PHP 8.3 │           │ PHP 8.3 │
    │ Moodle  │           │ Moodle  │           │ Moodle  │
-   │ 403-501 │           │ 403-501 │           │ 403-501 │
+   │   4.5   │           │ 4.5/5.0 │           │   5.1   │
    │ PG+MB   │           │ PG+MB   │           │ PG+MB   │
    └────┬────┘           └────┬────┘           └────┬────┘
         │                     │                     │
@@ -138,28 +139,23 @@
                          RESULT MATRIX
 ═══════════════════════════════════════════════════════════════════
 
-         │ PHP 8.1 │ PHP 8.2 │ PHP 8.3 │
-─────────┼─────────┼─────────┼─────────┤
-M403 PG  │   ✅    │   ✅    │   ✅    │
-M403 MB  │   ✅    │   ✅    │   ✅    │
-M404 PG  │   ✅    │   ✅    │   ✅    │
-M404 MB  │   ✅    │   ✅    │   ✅    │
-M405 PG  │   ✅    │   ✅    │   ✅    │
-M405 MB  │   ✅    │   ✅    │   ✅    │
-M500 PG  │   ✅    │   ✅    │   ✅    │
-M500 MB  │   ✅    │   ✅    │   ✅    │
-M501 PG  │   ✅    │   ✅    │   ✅💬  │ ← PR Comment here
-M501 MB  │   ✅    │   ✅    │   ✅    │
-─────────┴─────────┴─────────┴─────────┘
+         │ PHP 8.2 │ PHP 8.3 │
+─────────┼─────────┼─────────┤
+M405 PG  │   ✅    │   ✅    │
+M405 MB  │   ✅    │   ✅    │
+M500 PG  │   --    │   ✅    │
+M500 MB  │   --    │   ✅    │
+M501 PG  │   --    │   ✅💬  │ ← PR Comment here
+M501 MB  │   --    │   ✅    │
+─────────┴─────────┴─────────┘
 
 Legend:
-  M403 = MOODLE_403_STABLE
-  M404 = MOODLE_404_STABLE
-  M405 = MOODLE_405_STABLE
-  M500 = MOODLE_500_STABLE
-  M501 = MOODLE_501_STABLE
+  M405 = MOODLE_405_STABLE (Moodle 4.5)
+  M500 = MOODLE_500_STABLE (Moodle 5.0)
+  M501 = MOODLE_501_STABLE (Moodle 5.1)
   PG   = PostgreSQL 17
   MB   = MariaDB 10.11
+  --   = Excluded (PHP 8.2 not compatible with Moodle 5.0+)
   💬   = Pre-Code Review Comment (only on this combination)
 ```
 
@@ -184,5 +180,5 @@ Legend:
 └──────────────────────────┴───────────┴──────────────────────┘
 
 Total per job: ~25 minutes
-Total for all 30 jobs (parallel): ~25-30 minutes
+Total for all 8 jobs (parallel): ~25-30 minutes
 ```

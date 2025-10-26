@@ -32,7 +32,7 @@
         "courseid": 42,
         "cancreate": true,
         "createurl": "/report/ai_analysis/create.php?id=42",
-        "tablecontent": "<table>...</table>"
+        "tablecontent": "<table class='generaltable'><thead><tr><th>Title</th><th>Status</th></tr></thead><tbody><tr><td>Report 1</td><td>Completed</td></tr></tbody></table>"
     }
 }}
 
@@ -46,7 +46,5 @@
         {{/cancreate}}
     </div>
 
-    <div class="reports-table">
-        {{{tablecontent}}}
-    </div>
+    {{{tablecontent}}}
 </div>

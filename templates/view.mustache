@@ -17,37 +17,73 @@
 {{!
     @template report_ai_analysis/view
 
-    View page template for AI analysis report.
+    View page template for single AI analysis report.
 
     Context variables required for this template:
     * title - Report title
-    * status - Status code
+    * status - Report status code
     * statustext - Human readable status
     * statusbadgeclass - CSS class for status badge
-    * contextname - Context name
-    * timecreated - Creation date
-    * creator - Creator name
-    * scopedetails - Scope description
-    * prompt - Analysis prompt
-    * haveresult - Whether result is available
-    * airesult - AI analysis result (if available)
+    * contextname - Name of the context
+    * timecreated - Creation timestamp
+    * creator - Name of creator
+    * scopedetails - Details about analysis scope
+    * prompt - AI prompt text
+    * haveresult - Whether analysis has result
+    * airesult - AI analysis result (HTML)
     * aimodel - AI model used
-    * duration - Execution duration
-    * tokenusage - Token usage
+    * duration - Processing duration
+    * tokenusage - Tokens used
     * retries - Number of retries
-    * timecompleted - Completion time
+    * timecompleted - Completion timestamp
     * haserror - Whether there was an error
-    * errormessage - Error message (if failed)
-    * errorcode - Error code (if failed)
+    * errorcode - Error code
+    * errormessage - Error message
     * canviewrawdata - Whether user can view raw data
-    * rawdata - Raw conversation data (if permitted)
-    * candelete - Whether user can delete
-    * canrerun - Whether user can rerun
+    * rawdata - Raw data JSON
     * canedit - Whether user can edit
-    * deleteurl - URL to delete report
-    * rerunurl - URL to rerun report
-    * editurl - URL to edit report
+    * canrerun - Whether user can rerun
+    * candelete - Whether user can delete
+    * editurl - URL to edit
+    * rerunurl - URL to rerun
+    * deleteurl - URL to delete
+    * exportjsonurl - URL to export as JSON
+    * exporthtmlurl - URL to export as HTML
     * indexurl - URL back to index
+
+    Example context (json):
+    {
+        "title": "Course Activity Analysis",
+        "status": "completed",
+        "statustext": "Completed",
+        "statusbadgeclass": "badge badge-success",
+        "contextname": "Introduction to AI (Course)",
+        "timecreated": "2025-01-15 10:30",
+        "creator": "John Doe",
+        "scopedetails": "All activities in course",
+        "prompt": "Analyze student engagement patterns",
+        "haveresult": true,
+        "airesult": "<p>Analysis results...</p>",
+        "aimodel": "gpt-4",
+        "duration": "5.2s",
+        "tokenusage": "1500 tokens",
+        "retries": "0",
+        "timecompleted": "2025-01-15 10:35",
+        "haserror": false,
+        "errorcode": "",
+        "errormessage": "",
+        "canviewrawdata": true,
+        "rawdata": "{\"data\": \"value\"}",
+        "canedit": true,
+        "canrerun": true,
+        "candelete": true,
+        "editurl": "/report/ai_analysis/edit.php?id=123",
+        "rerunurl": "/report/ai_analysis/rerun.php?id=123",
+        "deleteurl": "/report/ai_analysis/delete.php?id=123",
+        "exportjsonurl": "/report/ai_analysis/export.php?id=123&format=json",
+        "exporthtmlurl": "/report/ai_analysis/export.php?id=123&format=html",
+        "indexurl": "/report/ai_analysis/index.php?id=42"
+    }
 }}
 
 <div class="report-ai-analysis-view">
@@ -59,7 +95,9 @@
 
     <div class="card mb-3">
         <div class="card-header">
+            {{#title}}
             <h3 class="mb-0">{{title}}</h3>
+            {{/title}}
             <span class="{{{statusbadgeclass}}}">{{statustext}}</span>
         </div>
         <div class="card-body">

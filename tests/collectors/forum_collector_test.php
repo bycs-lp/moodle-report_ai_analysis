@@ -540,7 +540,7 @@ final class forum_collector_test extends \advanced_testcase {
         $this->assertStringContainsString('Forum: Test Forum', $formatted);
         $this->assertStringContainsString('Course: Test Course (TC1)', $formatted);
         $this->assertStringContainsString('Started by: John Doe (ID: 2)', $formatted);
-        $this->assertStringContainsString('Total posts: 2', $formatted);
+        $this->assertStringContainsString('Posts: 2', $formatted);
 
         // Check posts.
         $this->assertStringContainsString('[POST by John Doe at', $formatted);
@@ -551,9 +551,6 @@ final class forum_collector_test extends \advanced_testcase {
         $this->assertStringContainsString('[POST by Jane Smith at', $formatted);
         $this->assertStringContainsString('Subject: Re: Initial Post', $formatted);
         $this->assertStringContainsString('This is a reply to the initial post.', $formatted);
-
-        // Debug output.
-        debugging("Formatted output:\n" . $formatted, DEBUG_DEVELOPER);
     }
 
     /**
