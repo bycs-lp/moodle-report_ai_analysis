@@ -2,6 +2,11 @@ name: Moodle Plugin CI
 
 on: [push, pull_request]
 
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
 jobs:
   test:
     runs-on: ubuntu-22.04
@@ -123,6 +128,130 @@ jobs:
           # Capability checks
           grep -rn "require_capability\|has_capability" --include="*.php" --exclude-dir=vendor --exclude-dir=tests . | wc -l | xargs echo "✅ Found capability checks:"
 
+      - name: Pre-Code Review - Performance Check
+        if: github.event_name == 'pull_request' && steps.changed-files.outputs.any_changed == 'true'
+        run: |
+          cd plugin
+          echo "⚡ Performance checks..."
+
+          # N+1 Query Pattern (Queries in loops)
+          grep -rn "foreach\|while\|for " --include="*.php" --exclude-dir=vendor --exclude-dir=tests . | while read line; do
+            file=$(echo "$line" | cut -d: -f1)
+            linenum=$(echo "$line" | cut -d: -f2)
+            next_lines=$(sed -n "${linenum},$((linenum+10))p" "$file" 2>/dev/null || echo "")
+            if echo "$next_lines" | grep -q "\$DB->get_record\|\$DB->get_records"; then
+              echo "⚠️ Potential N+1 query in $file:$linenum - Review if query can be moved outside loop"
+            fi
+          done | head -5 || echo "✅ No obvious N+1 query patterns"
+
+          # Inefficient get_records without limit
+          grep -rn "get_records([^)]*)" --include="*.php" --exclude-dir=vendor --exclude-dir=tests . | grep -v "get_records_sql\|get_records_select" | head -5 | while read line; do
+            if ! echo "$line" | grep -q "LIMIT\|limitfrom\|limitnum"; then
+              echo "⚠️ get_records without limit: $line (consider adding limit)"
+            fi
+          done || echo "✅ No get_records without limits found"
+
+          # Using get_records when get_record would suffice
+          grep -rn "get_records.*\[0\]\|get_records.*->first()" --include="*.php" --exclude-dir=vendor --exclude-dir=tests . | head -3 | while read line; do
+            echo "⚠️ Using get_records()[0] instead of get_record(): $line"
+          done || echo "✅ No inefficient get_records usage"
+
+      - name: Pre-Code Review - Moodle Best Practices
+        if: github.event_name == 'pull_request' && steps.changed-files.outputs.any_changed == 'true'
+        run: |
+          cd plugin
+          echo "📚 Moodle best practices checks..."
+
+          # Check for optional_param_array usage
+          grep -rn "\\\$_GET\\\[\|\\\$_POST\\\[" --include="*.php" --exclude-dir=vendor --exclude-dir=tests . | head -5 | while read line; do
+            echo "⚠️ Direct superglobal access (use required_param/optional_param): $line"
+          done || echo "✅ No direct superglobal access"
+
+          # Check if version.php was updated (if db/install.xml or db/upgrade.php changed)
+          if git diff --name-only origin/main 2>/dev/null | grep -q "db/install.xml\|db/upgrade.php"; then
+            if ! git diff --name-only origin/main 2>/dev/null | grep -q "version.php"; then
+              echo "⚠️ DB schema changed but version.php not updated!"
+            else
+              echo "✅ version.php updated with DB changes"
+            fi
+          else
+            echo "✅ No DB schema changes detected"
+          fi
+
+          # Check for new capabilities in db/access.php
+          if git diff origin/main -- . 2>/dev/null | grep -q "require_capability.*:"; then
+            if [ -f "db/access.php" ]; then
+              echo "✅ access.php exists for capability definitions"
+            else
+              echo "⚠️ Capabilities used but db/access.php missing!"
+            fi
+          fi
+
+          # Check for clean_param usage
+          grep -rn "clean_param" --include="*.php" --exclude-dir=vendor --exclude-dir=tests . | wc -l | xargs echo "ℹ️ Found clean_param usages:"
+
+      - name: Pre-Code Review - String Management
+        if: github.event_name == 'pull_request' && steps.changed-files.outputs.any_changed == 'true'
+        run: |
+          cd plugin
+          echo "🔤 String management checks..."
+
+          # Check for hardcoded strings (excluding common ones)
+          grep -rn "echo.*['\"][A-Z]" --include="*.php" --exclude-dir=vendor --exclude-dir=tests --exclude-dir=lang . | grep -v "get_string\|@\|TODO\|FIXME\|DEBUG\|SQL" | head -5 | while read line; do
+            echo "⚠️ Potential hardcoded string: $line"
+          done || echo "✅ No obvious hardcoded strings"
+
+          # Check if new strings were added to lang files
+          if git diff origin/main -- lang/en/*.php 2>/dev/null | grep -q "^+.*=>"; then
+            echo "✅ New language strings added"
+            git diff origin/main -- lang/en/*.php 2>/dev/null | grep "^+.*=>" | head -5
+          else
+            # Check if PHP files changed but no lang files
+            if git diff --name-only origin/main 2>/dev/null | grep -q "\.php$" && ! git diff --name-only origin/main 2>/dev/null | grep -q "lang/"; then
+              echo "ℹ️ PHP files changed but no language strings added (might be OK)"
+            else
+              echo "✅ No new language strings needed"
+            fi
+          fi
+
+          # Check for missing translations (if lang/en exists, check if lang/de exists too)
+          if [ -d "lang/en" ]; then
+            for enfile in lang/en/*.php; do
+              filename=$(basename "$enfile")
+              if [ ! -f "lang/de/$filename" ] 2>/dev/null; then
+                echo "⚠️ Missing German translation: lang/de/$filename"
+              fi
+            done || echo "✅ All translations present"
+          fi
+
+      - name: Pre-Code Review - Security Deep-Dive
+        if: github.event_name == 'pull_request' && steps.changed-files.outputs.any_changed == 'true'
+        run: |
+          cd plugin
+          echo "🔒 Security deep-dive checks..."
+
+          # Check for eval() usage
+          grep -rn "eval(" --include="*.php" --exclude-dir=vendor . && echo "❌ eval() found - HIGH SECURITY RISK!" || echo "✅ No eval() usage"
+
+          # Check for unsafe file operations
+          grep -rn "file_get_contents.*http\|curl_exec\|fopen.*http" --include="*.php" --exclude-dir=vendor --exclude-dir=tests . | head -3 | while read line; do
+            echo "⚠️ Remote file operation (verify URL validation): $line"
+          done || echo "✅ No remote file operations"
+
+          # Check for missing sesskey in forms
+          grep -rn "new moodleform\|class.*extends.*moodleform" --include="*.php" --exclude-dir=vendor . | while read line; do
+            file=$(echo "$line" | cut -d: -f1)
+            if ! grep -q "sesskey" "$file"; then
+              echo "⚠️ Form without sesskey check: $file (CSRF risk)"
+            fi
+          done | head -3 || echo "✅ Forms have CSRF protection"
+
+          # Check for unserialize usage
+          grep -rn "unserialize(" --include="*.php" --exclude-dir=vendor . && echo "⚠️ unserialize() found - verify data source is trusted!" || echo "✅ No unserialize() usage"
+
+          # Check for command execution
+          grep -rn "exec(\|shell_exec(\|system(\|passthru(" --include="*.php" --exclude-dir=vendor . && echo "❌ Command execution found - SECURITY RISK!" || echo "✅ No command execution"
+
       - name: Pre-Code Review - Generate Report
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
@@ -156,67 +285,78 @@ jobs:
               warnings.push('⚠️ Could not complete PHP syntax check');
             }
 
-            // Erstelle Review-Kommentar
+            // Create review comment
             const changedFiles = '${{ steps.changed-files.outputs.all_changed_files }}'.split(' ').filter(f => f);
 
-            let body = `## 🤖 Automatisches Pre-Code Review
+            let body = `## 🤖 Automated Pre-Code Review
 
             **Matrix:** PHP ${{ matrix.php }} | Moodle ${{ matrix.moodle-branch }} | DB ${{ matrix.database }}
 
-            ### 📝 Geänderte Dateien (${changedFiles.length})
+            ### 📝 Changed Files (${changedFiles.length})
             ${changedFiles.slice(0, 10).map(f => `- \`${f}\``).join('\n')}
-            ${changedFiles.length > 10 ? `\n... und ${changedFiles.length - 10} weitere` : ''}
+            ${changedFiles.length > 10 ? `\n... and ${changedFiles.length - 10} more` : ''}
             `;
 
             if (issues.length > 0) {
-              body += `\n### ❌ Kritische Probleme gefunden:\n${issues.slice(0, 10).join('\n')}`;
-              if (issues.length > 10) body += `\n... und ${issues.length - 10} weitere`;
+              body += `\n### ❌ Critical Issues Found:\n${issues.slice(0, 10).join('\n')}`;
+              if (issues.length > 10) body += `\n... and ${issues.length - 10} more`;
             }
 
             if (warnings.length > 0) {
-              body += `\n### ⚠️ Warnungen:\n${warnings.slice(0, 10).join('\n')}`;
+              body += `\n### ⚠️ Warnings:\n${warnings.slice(0, 10).join('\n')}`;
             }
 
             if (successes.length > 0) {
-              body += `\n### ✅ Erfolgreiche Checks:\n${successes.join('\n')}`;
+              body += `\n### ✅ Successful Checks:\n${successes.join('\n')}`;
             }
 
             body += `
 
-            ### 📋 Manuelle Review-Checkliste:
-            - [ ] **Moodle Coding Standards** vollständig eingehalten
-            - [ ] **PHPDoc** vollständig und korrekt (Package, Copyright, License)
+            ### 📋 Manual Review Checklist:
+            - [ ] **Moodle Coding Standards** fully compliant
+            - [ ] **PHPDoc** complete and correct (Package, Copyright, License)
             - [ ] **Security**:
-              - [ ] Alle Eingaben mit \`required_param()\` / \`optional_param()\` validiert
-              - [ ] Alle Ausgaben mit \`s()\`, \`format_text()\` oder \`html_writer\` escaped
-              - [ ] Capability Checks mit \`require_capability()\` vorhanden
+              - [ ] All inputs validated with \`required_param()\` / \`optional_param()\`
+              - [ ] All outputs escaped with \`s()\`, \`format_text()\` or \`html_writer\`
+              - [ ] Capability checks with \`require_capability()\` present
             - [ ] **Database**:
-              - [ ] Nur Core DB API verwendet (\`$DB->get_record()\`, etc.)
-              - [ ] SQL-Parameter korrekt gebunden (kein String-Concatenation)
+              - [ ] Only Core DB API used (\`$DB->get_record()\`, etc.)
+              - [ ] SQL parameters properly bound (no string concatenation)
             - [ ] **Tests**:
-              - [ ] PHPUnit Tests vorhanden/aktualisiert
-              - [ ] Behat Tests für neue Features
+              - [ ] PHPUnit tests present/updated
+              - [ ] Behat tests for new features
             - [ ] **Code Quality**:
-              - [ ] Keine Debug-Ausgaben (var_dump, print_r, die)
-              - [ ] Keine TODOs im Production Code
-              - [ ] Funktionen < 50 Zeilen, Klassen < 500 Zeilen
+              - [ ] No debug output (var_dump, print_r, die)
+              - [ ] No TODOs in production code
+              - [ ] Functions < 50 lines, Classes < 500 lines
             - [ ] **Moodle Standards**:
-              - [ ] Strings in Language Files (\`lang/en/\`)
-              - [ ] \`MOODLE_INTERNAL\` Check in allen PHP-Dateien
-              - [ ] Upgrade-Schritte in \`db/upgrade.php\` dokumentiert
+              - [ ] Strings in language files (\`lang/en/\`)
+              - [ ] \`MOODLE_INTERNAL\` check in all PHP files
+              - [ ] Upgrade steps documented in \`db/upgrade.php\`
 
             ---
-            💡 **Tipp:** Führe lokal \`../bindev/codechecker.sh report/ai_analysis\` und \`../bindev/moodlecheck.sh report/ai_analysis\` aus!
+            💡 **Tip:** Run locally \`../bindev/codechecker.sh report/ai_analysis\` and \`../bindev/moodlecheck.sh report/ai_analysis\`!
             `;
 
-            // Nur einen Kommentar pro Matrix-Kombination
-            if ('${{ matrix.php }}' === '8.3' && '${{ matrix.database }}' === 'pgsql' && '${{ matrix.moodle-branch }}' === 'MOODLE_501_STABLE') {
-              await github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: body
-              });
+            // Only post one comment per matrix combination and only for pull requests
+            if (context.payload.pull_request &&
+                context.issue && context.issue.number &&
+                '${{ matrix.php }}' === '8.3' &&
+                '${{ matrix.database }}' === 'pgsql' &&
+                '${{ matrix.moodle-branch }}' === 'MOODLE_501_STABLE') {
+              try {
+                await github.rest.issues.createComment({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: body
+                });
+                console.log('✅ Pre-code review comment posted successfully');
+              } catch (error) {
+                console.log('⚠️ Could not post comment:', error.message);
+              }
+            } else {
+              console.log('ℹ️ Skipping comment (not a PR or not the primary matrix combination)');
             }
 
       - name: PHP Lint
