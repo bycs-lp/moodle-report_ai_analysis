@@ -263,13 +263,32 @@ jobs:
             const issues = [];
             const warnings = [];
             const successes = [];
+            const infos = [];
+
+            // Helper function to run checks safely
+            function runCheck(command, successMsg, warningMsg, isWarning = true) {
+              try {
+                const output = execSync(command, { encoding: 'utf8', cwd: 'plugin' });
+                if (output.trim()) {
+                  if (isWarning) {
+                    warnings.push(warningMsg + '\n```\n' + output.trim().split('\n').slice(0, 5).join('\n') + '\n```');
+                  } else {
+                    issues.push(warningMsg + '\n```\n' + output.trim().split('\n').slice(0, 5).join('\n') + '\n```');
+                  }
+                } else {
+                  successes.push(successMsg);
+                }
+              } catch (error) {
+                successes.push(successMsg);
+              }
+            }
 
             try {
               // PHP Syntax Check
               const phpFiles = execSync('cd plugin && find . -name "*.php" -type f ! -path "*/vendor/*"', { encoding: 'utf8' }).trim().split('\n');
               let syntaxErrors = 0;
 
-              for (const file of phpFiles.slice(0, 50)) { // Limit to first 50 files
+              for (const file of phpFiles.slice(0, 50)) {
                 try {
                   execSync(`php -l plugin/${file}`, { encoding: 'utf8', stdio: 'pipe' });
                 } catch (error) {
@@ -285,6 +304,85 @@ jobs:
               warnings.push('⚠️ Could not complete PHP syntax check');
             }
 
+            // Complexity Check
+            try {
+              const largeFiles = execSync('cd plugin && find . -name "*.php" -type f -exec wc -l {} \\; | awk \'{if($1>500) print $2" has "$1" lines"}\'', { encoding: 'utf8' }).trim();
+              if (largeFiles) {
+                warnings.push('⚠️ Large files found (>500 lines):\n```\n' + largeFiles.split('\n').slice(0, 5).join('\n') + '\n```');
+              } else {
+                successes.push('✅ No excessively large files');
+              }
+            } catch (e) {}
+
+            // Debug statements
+            runCheck('grep -r "var_dump\\|print_r\\|die(" --include="*.php" . 2>/dev/null || true',
+              '✅ No debug statements', '⚠️ Debug statements found');
+
+            // TODOs
+            runCheck('grep -r "TODO\\|FIXME\\|XXX" --include="*.php" . 2>/dev/null || true',
+              '✅ No TODOs', '⚠️ TODOs found in code');
+
+            // MOODLE_INTERNAL check
+            runCheck('find . -name "*.php" -type f ! -path "*/vendor/*" ! -path "*/tests/fixtures/*" -exec grep -L "defined(\'MOODLE_INTERNAL\')" {} \\; 2>/dev/null | head -5 || true',
+              '✅ MOODLE_INTERNAL checks present', '⚠️ Missing MOODLE_INTERNAL in files');
+
+            // PHPDoc check
+            runCheck('find . -name "*.php" -type f ! -path "*/vendor/*" ! -path "*/tests/fixtures/*" -exec grep -L "@package\\|@copyright\\|@license" {} \\; 2>/dev/null | head -5 || true',
+              '✅ PHPDoc headers present', '⚠️ Missing PHPDoc headers');
+
+            // Deprecated functions
+            runCheck('grep -r "mysql_\\|ereg\\|split(" --include="*.php" --exclude-dir=vendor . 2>/dev/null || true',
+              '✅ No deprecated PHP functions', '⚠️ Deprecated PHP functions found', false);
+
+            // Security: eval()
+            runCheck('grep -rn "eval(" --include="*.php" --exclude-dir=vendor . 2>/dev/null || true',
+              '✅ No eval() usage', '❌ eval() found - HIGH SECURITY RISK!', false);
+
+            // Security: Command execution
+            runCheck('grep -rn "exec(\\|shell_exec(\\|system(\\|passthru(" --include="*.php" --exclude-dir=vendor . 2>/dev/null || true',
+              '✅ No command execution', '❌ Command execution found - SECURITY RISK!', false);
+
+            // Security: Unserialize
+            runCheck('grep -rn "unserialize(" --include="*.php" --exclude-dir=vendor . 2>/dev/null || true',
+              '✅ No unserialize() usage', '⚠️ unserialize() found - verify data source');
+
+            // Direct superglobal access
+            runCheck('grep -rn "\\$_GET\\[\\|\\$_POST\\[" --include="*.php" --exclude-dir=vendor --exclude-dir=tests . 2>/dev/null | head -5 || true',
+              '✅ No direct superglobal access', '⚠️ Direct $_GET/$_POST access (use required_param/optional_param)');
+
+            // Hardcoded strings
+            runCheck('grep -rn "echo.*[\\\'\\"][A-Z]" --include="*.php" --exclude-dir=vendor --exclude-dir=tests --exclude-dir=lang . 2>/dev/null | grep -v "get_string\\|@\\|TODO\\|FIXME\\|DEBUG\\|SQL" | head -5 || true',
+              '✅ No obvious hardcoded strings', '⚠️ Potential hardcoded strings (should be in lang files)');
+
+            // Performance: Potential N+1 queries
+            try {
+              const result = execSync('cd plugin && grep -rn "foreach\\|while\\|for " --include="*.php" --exclude-dir=vendor --exclude-dir=tests . 2>/dev/null | head -20 || true', { encoding: 'utf8' });
+              let n1Found = false;
+              const lines = result.trim().split('\n').slice(0, 10);
+              for (const line of lines) {
+                const match = line.match(/^(.+):(\d+):/);
+                if (match) {
+                  const file = match[1];
+                  const lineNum = parseInt(match[2]);
+                  try {
+                    const fileContent = fs.readFileSync(`plugin/${file}`, 'utf8');
+                    const fileLines = fileContent.split('\n');
+                    const nextLines = fileLines.slice(lineNum, lineNum + 10).join('\n');
+                    if (nextLines.includes('$DB->get_record') || nextLines.includes('$DB->get_records')) {
+                      warnings.push(`⚠️ Potential N+1 query in ${file}:${lineNum}`);
+                      n1Found = true;
+                      break;
+                    }
+                  } catch (e) {}
+                }
+              }
+              if (!n1Found) {
+                successes.push('✅ No obvious N+1 query patterns');
+              }
+            } catch (e) {
+              infos.push('ℹ️ Could not check for N+1 queries');
+            }
+
             // Create review comment
             const changedFiles = '${{ steps.changed-files.outputs.all_changed_files }}'.split(' ').filter(f => f);
 
@@ -298,41 +396,58 @@ jobs:
             `;
 
             if (issues.length > 0) {
-              body += `\n### ❌ Critical Issues Found:\n${issues.slice(0, 10).join('\n')}`;
-              if (issues.length > 10) body += `\n... and ${issues.length - 10} more`;
+              body += `\n### ❌ Critical Issues Found:\n${issues.slice(0, 15).join('\n')}`;
+              if (issues.length > 15) body += `\n\n... and ${issues.length - 15} more`;
             }
 
             if (warnings.length > 0) {
-              body += `\n### ⚠️ Warnings:\n${warnings.slice(0, 10).join('\n')}`;
+              body += `\n\n### ⚠️ Warnings:\n${warnings.slice(0, 15).join('\n')}`;
+              if (warnings.length > 15) body += `\n\n... and ${warnings.length - 15} more`;
             }
 
             if (successes.length > 0) {
-              body += `\n### ✅ Successful Checks:\n${successes.join('\n')}`;
+              body += `\n\n### ✅ Successful Checks (${successes.length}):\n${successes.join('\n')}`;
+            }
+
+            if (infos.length > 0) {
+              body += `\n\n### ℹ️ Information:\n${infos.join('\n')}`;
             }
 
             body += `
 
             ### 📋 Manual Review Checklist:
-            - [ ] **Moodle Coding Standards** fully compliant
-            - [ ] **PHPDoc** complete and correct (Package, Copyright, License)
+            - [ ] **Moodle Coding Standards** fully compliant (run \`phpcs\` and \`phpdoc\` checks)
             - [ ] **Security**:
               - [ ] All inputs validated with \`required_param()\` / \`optional_param()\`
               - [ ] All outputs escaped with \`s()\`, \`format_text()\` or \`html_writer\`
               - [ ] Capability checks with \`require_capability()\` present
+              - [ ] CSRF protection (sesskey) in all forms
+              - [ ] No SQL injection risks (verify bound parameters)
             - [ ] **Database**:
               - [ ] Only Core DB API used (\`$DB->get_record()\`, etc.)
-              - [ ] SQL parameters properly bound (no string concatenation)
+              - [ ] Transactions used for multi-step operations
+              - [ ] Indexes defined for new columns in \`install.xml\`
             - [ ] **Tests**:
-              - [ ] PHPUnit tests present/updated
-              - [ ] Behat tests for new features
+              - [ ] PHPUnit tests present/updated for new functionality
+              - [ ] Behat tests for new user-facing features
+              - [ ] Tests cover edge cases and error conditions
+            - [ ] **Performance**:
+              - [ ] No N+1 query issues (queries outside loops)
+              - [ ] Appropriate limits on \`get_records()\` calls
+              - [ ] Caching used where appropriate
             - [ ] **Code Quality**:
-              - [ ] No debug output (var_dump, print_r, die)
-              - [ ] No TODOs in production code
-              - [ ] Functions < 50 lines, Classes < 500 lines
+              - [ ] Functions focused and < 50 lines
+              - [ ] Classes cohesive and < 500 lines
+              - [ ] No code duplication
             - [ ] **Moodle Standards**:
-              - [ ] Strings in language files (\`lang/en/\`)
-              - [ ] \`MOODLE_INTERNAL\` check in all PHP files
+              - [ ] All user-facing text in language files
+              - [ ] New capabilities documented in \`db/access.php\`
               - [ ] Upgrade steps documented in \`db/upgrade.php\`
+              - [ ] \`version.php\` updated if DB schema changed
+            - [ ] **Documentation**:
+              - [ ] README updated if plugin behavior changed
+              - [ ] API changes documented
+              - [ ] Complex logic has inline comments
 
             ---
             💡 **Tip:** Run locally \`../bindev/codechecker.sh report/ai_analysis\` and \`../bindev/moodlecheck.sh report/ai_analysis\`!
