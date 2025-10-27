@@ -38,6 +38,7 @@ $string['analysis_mode_help'] = 'Choose the analysis mode:<ul><li><strong>Indivi
 $string['analysis_mode_individual'] = 'Individual (per participant)';
 $string['analysis_result'] = 'Analysis Result';
 $string['analysisqueued'] = 'Analysis has been queued for background processing';
+$string['cachedef_providers'] = 'Cache for data source providers';
 $string['cancel'] = 'Cancel';
 $string['cannotdeleteothersreports'] = 'You cannot delete reports created by other users';
 $string['cannoteditrunningreport'] = 'Cannot edit a report that is currently running';

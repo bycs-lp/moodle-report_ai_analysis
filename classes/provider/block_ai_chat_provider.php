@@ -15,45 +15,28 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Conversation collector for structured AI chat data.
+ * Block AI Chat provider for block_ai_chat conversations.
  *
  * @package    report_ai_analysis
  * @copyright  2025 PeMaSoft, Dr. Peter Mayer
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-namespace report_ai_analysis\collectors;
+namespace report_ai_analysis\provider;
 
 use report_ai_analysis\scope_builder;
 
 /**
- * Collects structured conversation data from block_ai_chat.
+ * Provider for block_ai_chat conversation data.
  *
- * This collector uses the ai_chat block's own methods to retrieve
- * properly structured conversations instead of raw log data.
- * This provides better context for AI analysis.
+ * Collects structured conversation data from block_ai_chat using the
+ * ai_manager's log system. Provides conversations as complete threads
+ * with user prompts and AI responses.
  *
  * @copyright  2025 PeMaSoft, Dr. Peter Mayer
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class conversation_collector {
-    /** @var scope_builder The scope builder */
-    private $scopebuilder;
-
-    /** @var int Maximum conversations to collect per user */
-    private $maxconversations;
-
-    /**
-     * Constructor.
-     *
-     * @param scope_builder $scopebuilder The scope builder
-     * @param int $maxconversations Maximum conversations per user (default: 100)
-     */
-    public function __construct(scope_builder $scopebuilder, int $maxconversations = 100) {
-        $this->scopebuilder = $scopebuilder;
-        $this->maxconversations = $maxconversations;
-    }
-
+class block_ai_chat_provider extends base_provider {
     /**
      * Check if block_ai_chat is available.
      *
@@ -73,6 +56,19 @@ class conversation_collector {
         $blockinfo = $pluginmanager->get_plugin_info('block_ai_chat');
 
         return $blockinfo && $blockinfo->is_enabled();
+    }
+
+    /**
+     * Get provider metadata.
+     *
+     * @return array Metadata array
+     */
+    public static function get_metadata(): array {
+        return [
+            'name' => get_string('pluginname', 'block_ai_chat'),
+            'type' => 'block_ai_chat',
+            'description' => 'AI Chat conversation threads',
+        ];
     }
 
     /**
@@ -114,8 +110,9 @@ class conversation_collector {
         }
 
         // Limit total number of conversations.
-        if (count($allconversations) > ($this->maxconversations * count($userids))) {
-            $allconversations = array_slice($allconversations, 0, $this->maxconversations * count($userids));
+        $maxconversations = $this->maxrecords;
+        if (count($allconversations) > ($maxconversations * count($userids))) {
+            $allconversations = array_slice($allconversations, 0, $maxconversations * count($userids));
         }
 
         return $allconversations;
@@ -272,5 +269,39 @@ class conversation_collector {
         }
 
         return $stats;
+    }
+
+    /**
+     * Check if this provider handles the given source identifier.
+     *
+     * Handles source identifiers starting with 'block_' that are block_ai_chat instances.
+     *
+     * @param string $sourceidentifier Source identifier (e.g., 'block_123')
+     * @return bool True if this provider handles this source
+     */
+    public function handles_source(string $sourceidentifier): bool {
+        // Check if it's a block source.
+        if (strpos($sourceidentifier, 'block_') !== 0) {
+            return false;
+        }
+
+        // Extract context ID and verify it's an ai_chat block.
+        $contextid = (int)substr($sourceidentifier, 6);
+        if ($contextid <= 0) {
+            return false;
+        }
+
+        global $DB;
+        try {
+            $context = \context::instance_by_id($contextid, IGNORE_MISSING);
+            if (!$context || $context->contextlevel !== CONTEXT_BLOCK) {
+                return false;
+            }
+
+            $blockinstance = $DB->get_record('block_instances', ['id' => $context->instanceid]);
+            return $blockinstance && $blockinstance->blockname === 'ai_chat';
+        } catch (\Exception $e) {
+            return false;
+        }
     }
 }

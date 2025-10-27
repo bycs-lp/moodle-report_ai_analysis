@@ -24,14 +24,14 @@
 
 namespace report_ai_analysis;
 
-use report_ai_analysis\collectors\conversation_collector;
-use report_ai_analysis\collectors\forum_collector;
+use report_ai_analysis\provider\provider_factory;
 
 /**
  * Collects structured conversation and discussion data.
  *
- * This collector delegates to specific collectors based on
- * available data sources (block_ai_chat, mod_forum, etc.).
+ * This collector uses a provider pattern to delegate collection to specific
+ * data source providers. Providers are automatically discovered and instantiated
+ * based on available plugins and scope requirements.
  *
  * @copyright  2025 PeMaSoft, Dr. Peter Mayer
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
@@ -57,46 +57,46 @@ class data_collector {
     /**
      * Collect structured conversation and discussion data from all available sources.
      *
+     * Uses provider pattern to automatically discover and delegate to available data providers.
+     *
      * @return array Array with data from all available sources
      * @throws \moodle_exception If no data sources are available
      */
     public function collect(): array {
-        $alldata = [
-            'conversations' => [],
-            'discussions' => [],
-        ];
+        $alldata = [];
 
         // Get sources to collect from scope.
         $sources = $this->scopebuilder->get_sources_in_scope();
 
-        // If no sources specified, collect from all available sources.
-        $collectall = empty($sources);
+        // Get all available providers.
+        $providers = provider_factory::get_all_providers($this->scopebuilder, $this->maxrecords);
 
-        // Collect from block_ai_chat if available and requested.
-        $collectconversations = $collectall || $this->has_block_sources($sources);
-        if ($collectconversations && conversation_collector::is_available()) {
-            try {
-                $collector = new conversation_collector($this->scopebuilder, $this->maxrecords);
-                $alldata['conversations'] = $collector->collect();
-            } catch (\Exception $e) {
-                debugging('Conversation collector failed: ' . s($e->getMessage()), DEBUG_DEVELOPER);
-            }
+        if (empty($providers)) {
+            throw new \moodle_exception('error_no_data', 'report_ai_analysis');
         }
 
-        // Collect from mod_forum if available and requested.
-        $collectforums = $collectall || $this->has_forum_sources($sources);
+        // Collect from each provider.
+        foreach ($providers as $provider) {
+            $providertype = $provider::get_type();
 
-        if ($collectforums && forum_collector::is_available()) {
+            // If specific sources are set, check if this provider should collect.
+            if (!empty($sources) && !$this->should_collect_from_provider($provider, $sources)) {
+                continue;
+            }
+
             try {
-                $collector = new forum_collector($this->scopebuilder, $this->maxrecords);
-                $alldata['discussions'] = $collector->collect();
+                $data = $provider->collect();
+                if (!empty($data)) {
+                    // Store data with provider type as key.
+                    $alldata[$providertype] = $data;
+                }
             } catch (\Exception $e) {
-                debugging('Forum collector failed: ' . s($e->getMessage()), DEBUG_DEVELOPER);
+                debugging('Provider ' . get_class($provider) . ' failed: ' . s($e->getMessage()), DEBUG_DEVELOPER);
             }
         }
 
         // Check if any data was collected.
-        if (empty($alldata['conversations']) && empty($alldata['discussions'])) {
+        if (empty($alldata)) {
             throw new \moodle_exception('error_no_data', 'report_ai_analysis');
         }
 
@@ -104,7 +104,25 @@ class data_collector {
     }
 
     /**
+     * Check if provider should collect based on sources.
+     *
+     * @param \report_ai_analysis\provider\base_provider $provider Provider instance
+     * @param array $sources Array of source identifiers
+     * @return bool True if provider should collect
+     */
+    private function should_collect_from_provider($provider, array $sources): bool {
+        foreach ($sources as $source) {
+            if ($provider->handles_source($source)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Get formatted data as string for AI analysis.
+     *
+     * Delegates formatting to individual providers.
      *
      * @param array $data Array of collected data
      * @return string Formatted data
@@ -112,14 +130,24 @@ class data_collector {
     public static function format_for_ai(array $data): string {
         $output = [];
 
-        // Format conversations if available.
-        if (!empty($data['conversations'])) {
-            $output[] = conversation_collector::format_for_ai($data['conversations']);
-        }
+        // Get all available providers to access their format methods.
+        $providers = provider_factory::discover_providers();
 
-        // Format discussions if available.
-        if (!empty($data['discussions'])) {
-            $output[] = forum_collector::format_for_ai($data['discussions']);
+        foreach ($data as $providertype => $providerdata) {
+            if (empty($providerdata)) {
+                continue;
+            }
+
+            // Find matching provider class.
+            foreach ($providers as $providerclass) {
+                if ($providerclass::get_type() === $providertype) {
+                    $formatted = $providerclass::format_for_ai($providerdata);
+                    if (!empty($formatted)) {
+                        $output[] = $formatted;
+                    }
+                    break;
+                }
+            }
         }
 
         return implode("\n\n", $output);
@@ -128,69 +156,37 @@ class data_collector {
     /**
      * Get statistics about collected data.
      *
+     * Delegates statistics calculation to individual providers.
+     *
      * @param array $data Array of collected data
      * @return array Statistics
      */
     public static function get_statistics(array $data): array {
         $stats = [
             'total_sources' => 0,
-            'conversations' => [],
-            'discussions' => [],
         ];
 
-        // Get conversation statistics.
-        if (!empty($data['conversations'])) {
-            $stats['conversations'] = conversation_collector::get_statistics($data['conversations']);
-            $stats['total_sources']++;
-        }
+        // Get all available providers to access their statistics methods.
+        $providers = provider_factory::discover_providers();
 
-        // Get discussion statistics.
-        if (!empty($data['discussions'])) {
-            $stats['discussions'] = forum_collector::get_statistics($data['discussions']);
-            $stats['total_sources']++;
-        }
-
-        return $stats;
-    }
-
-    /**
-     * Check if sources contain any block sources (block_*).
-     *
-     * @param array $sources Array of source identifiers
-     * @return bool True if block sources found
-     */
-    private function has_block_sources(array $sources): bool {
-        foreach ($sources as $source) {
-            if (strpos($source, 'block_') === 0) {
-                return true;
+        foreach ($data as $providertype => $providerdata) {
+            if (empty($providerdata)) {
+                continue;
             }
-        }
-        return false;
-    }
 
-    /**
-     * Check if sources contain any forum course modules (cm_* with mod=forum).
-     *
-     * @param array $sources Array of source identifiers (e.g., ['cm_123', 'cm_456'])
-     * @return bool True if forum sources found
-     */
-    private function has_forum_sources(array $sources): bool {
-        global $DB;
-
-        foreach ($sources as $source) {
-            // Check if it's a course module source.
-            if (strpos($source, 'cm_') === 0) {
-                $cmid = (int)substr($source, 3);
-                // Check if this cm is a forum.
-                $modname = $DB->get_field('course_modules', 'module', ['id' => $cmid]);
-                if ($modname) {
-                    $modulename = $DB->get_field('modules', 'name', ['id' => $modname]);
-                    if ($modulename === 'forum') {
-                        return true;
+            // Find matching provider class.
+            foreach ($providers as $providerclass) {
+                if ($providerclass::get_type() === $providertype) {
+                    $providerstats = $providerclass::get_statistics($providerdata);
+                    if (!empty($providerstats)) {
+                        $stats[$providertype] = $providerstats;
+                        $stats['total_sources']++;
                     }
+                    break;
                 }
             }
         }
-        return false;
+
+        return $stats;
     }
 }

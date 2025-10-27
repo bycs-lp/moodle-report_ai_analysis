@@ -15,48 +15,29 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Forum discussion collector for structured forum data.
+ * Mod Forum provider for mod_forum discussions.
  *
  * @package    report_ai_analysis
  * @copyright  2025 PeMaSoft, Dr. Peter Mayer
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-namespace report_ai_analysis\collectors;
+namespace report_ai_analysis\provider;
 
 use report_ai_analysis\scope_builder;
 use mod_forum\local\container as forum_container;
 
 /**
- * Collects structured forum discussion data from mod_forum.
+ * Provider for mod_forum discussion data.
  *
- * This collector uses Moodle's forum vault system to retrieve
- * discussions and posts as coherent threads. Each discussion is
- * treated as a complete conversation unit for AI analysis.
- *
- * Uses the forum vault pattern to access data safely and maintainably.
+ * Collects structured forum discussion data using Moodle's forum vault system.
+ * Each discussion is treated as a complete conversation unit with hierarchical
+ * post structure for AI analysis.
  *
  * @copyright  2025 PeMaSoft, Dr. Peter Mayer
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class forum_collector {
-    /** @var scope_builder The scope builder */
-    private $scopebuilder;
-
-    /** @var int Maximum discussions to collect */
-    private $maxdiscussions;
-
-    /**
-     * Constructor.
-     *
-     * @param scope_builder $scopebuilder The scope builder
-     * @param int $maxdiscussions Maximum discussions to collect (default: 100)
-     */
-    public function __construct(scope_builder $scopebuilder, int $maxdiscussions = 100) {
-        $this->scopebuilder = $scopebuilder;
-        $this->maxdiscussions = $maxdiscussions;
-    }
-
+class mod_forum_provider extends base_provider {
     /**
      * Check if mod_forum is available.
      *
@@ -76,6 +57,19 @@ class forum_collector {
         $foruminfo = $pluginmanager->get_plugin_info('mod_forum');
 
         return $foruminfo && $foruminfo->is_enabled();
+    }
+
+    /**
+     * Get provider metadata.
+     *
+     * @return array Metadata array
+     */
+    public static function get_metadata(): array {
+        return [
+            'name' => get_string('pluginname', 'mod_forum'),
+            'type' => 'mod_forum',
+            'description' => 'Forum discussion threads',
+        ];
     }
 
     /**
@@ -121,7 +115,7 @@ class forum_collector {
                 true, // Include hidden discussions.
                 null, // Don't restrict to specific user.
                 null, // Use default sort order.
-                $this->maxdiscussions,
+                $this->maxrecords,
                 0
             );
 
@@ -159,7 +153,7 @@ class forum_collector {
                 ];
 
                 // Limit total discussions.
-                if (count($discussionstoprocess) >= $this->maxdiscussions) {
+                if (count($discussionstoprocess) >= $this->maxrecords) {
                     break 2;
                 }
             }
@@ -454,6 +448,41 @@ class forum_collector {
             if (!empty($post['replies'])) {
                 self::count_participants_from_posts($post['replies'], $participants);
             }
+        }
+    }
+
+    /**
+     * Check if this provider handles the given source identifier.
+     *
+     * Handles source identifiers starting with 'cm_' that are forum course modules.
+     *
+     * @param string $sourceidentifier Source identifier (e.g., 'cm_123')
+     * @return bool True if this provider handles this source
+     */
+    public function handles_source(string $sourceidentifier): bool {
+        // Check if it's a course module source.
+        if (strpos($sourceidentifier, 'cm_') !== 0) {
+            return false;
+        }
+
+        // Extract CM ID and verify it's a forum.
+        $cmid = (int)substr($sourceidentifier, 3);
+        if ($cmid <= 0) {
+            return false;
+        }
+
+        global $DB;
+        try {
+            // Get module type.
+            $moduleid = $DB->get_field('course_modules', 'module', ['id' => $cmid], IGNORE_MISSING);
+            if (!$moduleid) {
+                return false;
+            }
+
+            $modulename = $DB->get_field('modules', 'name', ['id' => $moduleid], IGNORE_MISSING);
+            return $modulename === 'forum';
+        } catch (\Exception $e) {
+            return false;
         }
     }
 }
