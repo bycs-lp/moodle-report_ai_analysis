@@ -96,7 +96,7 @@ class reports_table extends table_sql {
 
         // Join with user table to avoid N+1 queries.
         $userfields = \core_user\fields::for_name()->get_sql('u', false, '', '', false)->selects;
-        $fields = 'r.id, r.title, r.contextid, r.scope_details, r.timecreated, r.userid, r.status' . $userfields;
+        $fields = 'r.id, r.title, r.contextid, r.scope_details, r.timecreated, r.userid, r.status, ' . $userfields;
         $from = '{report_ai_analysis_reports} r LEFT JOIN {user} u ON r.userid = u.id';
 
         // Build WHERE clause based on context and permissions.

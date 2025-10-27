@@ -24,24 +24,13 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-if ($hassiteconfig) {
-    $settings = new admin_settingpage('report_ai_analysis', get_string('pluginname', 'report_ai_analysis'));
-
+if ($ADMIN->fulltree) {
     // System prompt.
     $settings->add(new admin_setting_configtextarea(
         'report_ai_analysis/system_prompt',
         get_string('system_prompt', 'report_ai_analysis'),
         get_string('system_prompt_desc', 'report_ai_analysis'),
         get_string('system_prompt_default', 'report_ai_analysis'),
-        PARAM_TEXT
-    ));
-
-    // Prompt templates.
-    $settings->add(new admin_setting_configtextarea(
-        'report_ai_analysis/prompt_templates',
-        get_string('prompt_templates', 'report_ai_analysis'),
-        get_string('prompt_templates_desc', 'report_ai_analysis'),
-        '',
         PARAM_TEXT
     ));
 
@@ -108,5 +97,14 @@ if ($hassiteconfig) {
         get_string('enable_markdown_conversion', 'report_ai_analysis'),
         get_string('enable_markdown_conversion_desc', 'report_ai_analysis'),
         1
+    ));
+
+    // Link to manage prompt templates.
+    $templatesurl = new moodle_url('/report/ai_analysis/manage_templates.php');
+    $templateslink = html_writer::link($templatesurl, get_string('manage_templates', 'report_ai_analysis'));
+    $settings->add(new admin_setting_heading(
+        'report_ai_analysis/prompt_templates_heading',
+        get_string('prompt_templates', 'report_ai_analysis'),
+        $templateslink
     ));
 }

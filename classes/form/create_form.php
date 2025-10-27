@@ -39,6 +39,8 @@ class create_form extends \moodleform {
      * Form definition.
      */
     protected function definition() {
+        global $PAGE;
+
         $mform = $this->_form;
         $courseid = $this->_customdata['id'];
 
@@ -47,10 +49,14 @@ class create_form extends \moodleform {
         $mform->setType('title', PARAM_TEXT);
         $mform->addHelpButton('title', 'title', 'report_ai_analysis');
 
+        // Load and display prompt templates.
+        $this->add_prompt_templates($mform);
+
         // Prompt field (required).
         $mform->addElement('textarea', 'prompt', get_string('prompt', 'report_ai_analysis'), [
             'rows' => 10,
             'cols' => 60,
+            'id' => 'id_prompt',
         ]);
         $mform->setType('prompt', PARAM_RAW);
         $mform->addRule('prompt', get_string('required'), 'required', null, 'client');
@@ -235,6 +241,76 @@ class create_form extends \moodleform {
         if (!empty($groups)) {
             $select = $mform->addElement('autocomplete', 'groups', get_string('groups', 'report_ai_analysis'), $groups);
             $select->setMultiple(true);
+        }
+    }
+
+    /**
+     * Add prompt templates section.
+     *
+     * @param \MoodleQuickForm $mform The form
+     */
+    private function add_prompt_templates(\MoodleQuickForm $mform) {
+        global $PAGE;
+
+        // Load enabled templates from database.
+        $templates = \report_ai_analysis\template_manager::get_enabled_templates();
+
+        if (empty($templates)) {
+            return;
+        }
+
+        $mform->addElement('header', 'templateheader', get_string('prompt_templates', 'report_ai_analysis'));
+
+        $templatecount = count($templates);
+
+        // Decide UI based on number of templates.
+        if ($templatecount <= 5) {
+            // Button variant for up to 5 templates.
+            $buttons = [];
+            foreach ($templates as $template) {
+                $buttons[] = \html_writer::tag(
+                    'button',
+                    s($template->title),
+                    [
+                        'type' => 'button',
+                        'class' => 'btn btn-secondary btn-sm m-1 prompt-template-btn',
+                        'data-prompt' => s($template->prompt),
+                    ]
+                );
+            }
+
+            $mform->addElement(
+                'html',
+                \html_writer::div(
+                    implode('', $buttons),
+                    'prompt-templates-buttons mb-3'
+                )
+            );
+        } else {
+            // Select dropdown for more than 5 templates.
+            $options = ['' => get_string('select_template', 'report_ai_analysis')];
+            $templatesarray = [];
+
+            foreach ($templates as $template) {
+                $options[$template->id] = $template->title;
+                $templatesarray[$template->id] = ['prompt' => $template->prompt];
+            }
+
+            $mform->addElement(
+                'select',
+                'template_selector',
+                get_string('use_template', 'report_ai_analysis'),
+                $options,
+                ['id' => 'id_template_selector', 'class' => 'mb-3']
+            );
+
+            // Pass templates to JavaScript.
+            $PAGE->requires->js_call_amd('report_ai_analysis/prompt_templates', 'init', [$templatesarray]);
+        }
+
+        // Initialize JavaScript for button variant.
+        if ($templatecount <= 5) {
+            $PAGE->requires->js_call_amd('report_ai_analysis/prompt_templates', 'initButtons');
         }
     }
 
