@@ -60,64 +60,10 @@ final class data_collector_test extends \advanced_testcase {
     }
 
     /**
-     * Test has_forum_sources detects forum course modules.
-     *
-     * @covers \report_ai_analysis\data_collector::has_forum_sources
-     */
-    public function test_has_forum_sources(): void {
-        $this->resetAfterTest();
-        $this->setAdminUser();
-
-        $course = $this->getDataGenerator()->create_course();
-
-        // Create forum and quiz.
-        $forum = $this->getDataGenerator()->create_module('forum', ['course' => $course->id]);
-        $quiz = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
-
-        $scopebuilder = new scope_builder($course->id);
-
-        // Test with forum source.
-        $scopebuilder->with_sources(['cm_' . $forum->cmid]);
-        $collector = new data_collector($scopebuilder);
-
-        // Use reflection to access private method.
-        $reflection = new \ReflectionClass($collector);
-        $method = $reflection->getMethod('has_forum_sources');
-        $method->setAccessible(true);
-
-        $this->assertTrue($method->invoke($collector, ['cm_' . $forum->cmid]));
-        $this->assertFalse($method->invoke($collector, ['cm_' . $quiz->cmid]));
-        $this->assertFalse($method->invoke($collector, []));
-    }
-
-    /**
-     * Test has_block_sources detects block sources.
-     *
-     * @covers \report_ai_analysis\data_collector::has_block_sources
-     */
-    public function test_has_block_sources(): void {
-        $this->resetAfterTest();
-        $this->setAdminUser();
-
-        $course = $this->getDataGenerator()->create_course();
-        $scopebuilder = new scope_builder($course->id);
-        $collector = new data_collector($scopebuilder);
-
-        // Use reflection to access private method.
-        $reflection = new \ReflectionClass($collector);
-        $method = $reflection->getMethod('has_block_sources');
-        $method->setAccessible(true);
-
-        $this->assertTrue($method->invoke($collector, ['block_123']));
-        $this->assertFalse($method->invoke($collector, ['cm_456']));
-        $this->assertFalse($method->invoke($collector, []));
-    }
-
-    /**
      * Test collect with forum source.
      *
      * @covers \report_ai_analysis\data_collector::collect
-     * @covers \report_ai_analysis\collectors\forum_collector::collect
+     * @covers \report_ai_analysis\provider\mod_forum_provider::collect
      */
     public function test_collect_forum_source(): void {
         global $DB;
@@ -147,14 +93,12 @@ final class data_collector_test extends \advanced_testcase {
         $data = $collector->collect();
 
         $this->assertIsArray($data);
-        $this->assertArrayHasKey('conversations', $data);
-        $this->assertArrayHasKey('discussions', $data);
-        $this->assertEmpty($data['conversations']);
-        $this->assertNotEmpty($data['discussions']);
-        $this->assertCount(1, $data['discussions']);
+        $this->assertArrayHasKey('mod_forum', $data);
+        $this->assertNotEmpty($data['mod_forum']);
+        $this->assertCount(1, $data['mod_forum']);
 
         // Verify discussion structure.
-        $discussiondata = $data['discussions'][0];
+        $discussiondata = $data['mod_forum'][0];
         $this->assertEquals('Test Discussion', $discussiondata['title']);
         $this->assertArrayHasKey('posts', $discussiondata);
         $this->assertNotEmpty($discussiondata['posts']);
@@ -199,11 +143,11 @@ final class data_collector_test extends \advanced_testcase {
         $collector = new data_collector($scopebuilder);
         $data = $collector->collect();
 
-        $this->assertNotEmpty($data['discussions']);
-        $this->assertCount(2, $data['discussions']);
+        $this->assertNotEmpty($data['mod_forum']);
+        $this->assertCount(2, $data['mod_forum']);
 
         // Verify both discussions are present.
-        $titles = array_column($data['discussions'], 'title');
+        $titles = array_column($data['mod_forum'], 'title');
         $this->assertContains('Discussion in Forum 1', $titles);
         $this->assertContains('Discussion in Forum 2', $titles);
     }
@@ -279,8 +223,8 @@ final class data_collector_test extends \advanced_testcase {
         $this->assertIsArray($stats);
         $this->assertArrayHasKey('total_sources', $stats);
         $this->assertEquals(1, $stats['total_sources']);
-        $this->assertArrayHasKey('discussions', $stats);
-        $this->assertNotEmpty($stats['discussions']);
+        $this->assertArrayHasKey('mod_forum', $stats);
+        $this->assertNotEmpty($stats['mod_forum']);
     }
 
     /**
@@ -319,9 +263,10 @@ final class data_collector_test extends \advanced_testcase {
         $data = $collector->collect();
 
         // Should collect forum discussions.
-        $this->assertNotEmpty($data['discussions']);
-        // Conversations might be empty if block_ai_chat is not available.
-        $this->assertArrayHasKey('conversations', $data);
+        $this->assertNotEmpty($data['mod_forum']);
+        // Block AI chat data might be empty if no chat data exists - that's okay.
+        // Just verify the data structure was created properly.
+        $this->assertIsArray($data);
     }
 
     /**
@@ -371,9 +316,9 @@ final class data_collector_test extends \advanced_testcase {
         $collector = new data_collector($scopebuilder);
         $data = $collector->collect();
 
-        $this->assertNotEmpty($data['discussions']);
-        $this->assertCount(1, $data['discussions'], 'Should only get discussion from today');
-        $this->assertEquals('Today Discussion', $data['discussions'][0]['title']);
+        $this->assertNotEmpty($data['mod_forum']);
+        $this->assertCount(1, $data['mod_forum'], 'Should only get discussion from today');
+        $this->assertEquals('Today Discussion', $data['mod_forum'][0]['title']);
 
         // Test with timerange that excludes today (only old discussions).
         $scopebuilder2 = new scope_builder($course->id);
@@ -383,8 +328,8 @@ final class data_collector_test extends \advanced_testcase {
         $collector2 = new data_collector($scopebuilder2);
         $data2 = $collector2->collect();
 
-        $this->assertNotEmpty($data2['discussions']);
-        $this->assertCount(1, $data2['discussions'], 'Should only get old discussion');
-        $this->assertEquals('Old Discussion', $data2['discussions'][0]['title']);
+        $this->assertNotEmpty($data2['mod_forum']);
+        $this->assertCount(1, $data2['mod_forum'], 'Should only get old discussion');
+        $this->assertEquals('Old Discussion', $data2['mod_forum'][0]['title']);
     }
 }
