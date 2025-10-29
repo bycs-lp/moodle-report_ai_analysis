@@ -223,8 +223,29 @@ class reports_table extends table_sql {
         $viewurl = new moodle_url('/report/ai_analysis/view.php', ['id' => $row->id]);
         $actions[] = html_writer::link($viewurl, get_string('view', 'report_ai_analysis'));
 
-        // Edit action (if user has permission and report is not running).
+        // Export action (if completed).
+        if ($row->status === 'completed') {
+            $exporturl = new moodle_url('/report/ai_analysis/export.php', [
+                'id' => $row->id,
+                'format' => 'json',
+            ]);
+            $actions[] = html_writer::link($exporturl, get_string('export', 'report_ai_analysis'));
+        }
+
+        // Re-run action (if completed, failed, or cancelled and user has permission).
         $reportcontext = \context::instance_by_id($row->contextid);
+        if (
+            has_capability('report/ai_analysis:rerun', $reportcontext) &&
+            in_array($row->status, ['completed', 'failed', 'cancelled'])
+        ) {
+            $rerunurl = new moodle_url('/report/ai_analysis/rerun.php', [
+                'id' => $row->id,
+                'sesskey' => sesskey(),
+            ]);
+            $actions[] = html_writer::link($rerunurl, get_string('rerun', 'report_ai_analysis'));
+        }
+
+        // Edit action (if user has permission and report is not running).
         if (has_capability('report/ai_analysis:create', $reportcontext) && !in_array($row->status, ['running'])) {
             $editurl = new moodle_url('/report/ai_analysis/create.php', ['reportid' => $row->id]);
             $actions[] = html_writer::link($editurl, get_string('edit', 'report_ai_analysis'));
@@ -235,8 +256,7 @@ class reports_table extends table_sql {
             $deleteurl = new moodle_url('/report/ai_analysis/index.php', [
                 'action' => 'delete',
                 'reportid' => $row->id,
-                'sesskey' => sesskey(),
-                'courseid' => $reportcontext->instanceid,
+                'id' => $reportcontext->instanceid,
             ]);
             $actions[] = html_writer::link($deleteurl, get_string('delete', 'report_ai_analysis'), [
                 'class' => 'text-danger',
@@ -249,7 +269,7 @@ class reports_table extends table_sql {
                 'action' => 'cancel',
                 'reportid' => $row->id,
                 'sesskey' => sesskey(),
-                'courseid' => $reportcontext->instanceid,
+                'id' => $reportcontext->instanceid,
             ]);
             $actions[] = html_writer::link($cancelurl, get_string('cancel', 'report_ai_analysis'), [
                 'class' => 'text-warning',

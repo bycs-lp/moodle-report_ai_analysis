@@ -199,6 +199,9 @@ class view_page implements renderable, templatable {
             $data->retries = $this->report->retry_count ?? 0;
             $data->timecompleted = !empty($this->report->timecompleted) ?
                 userdate($this->report->timecompleted, get_string('strftimedatetimeshort', 'langconfig')) : '-';
+        } else {
+            // Still show AI model even if not completed.
+            $data->aimodel = $this->report->ai_model_name ?? '-';
         }
 
         // Error info (if failed).
@@ -216,13 +219,14 @@ class view_page implements renderable, templatable {
 
         // Actions.
         $data->candelete = has_capability('report/ai_analysis:delete', $this->context);
+
         $data->canrerun = has_capability('report/ai_analysis:rerun', $this->context) &&
             in_array($this->report->status, ['failed', 'cancelled', 'completed']);
         $data->canedit = has_capability('report/ai_analysis:create', $this->context) &&
             !in_array($this->report->status, ['running']);
 
         if ($data->candelete) {
-            $data->deleteurl = new \moodle_url('/report/ai_analysis/index.php', [
+            $data->deleteurl = new \moodle_url('/report/ai_analysis/view.php', [
                 'action' => 'delete',
                 'id' => $this->report->id,
                 'sesskey' => sesskey(),

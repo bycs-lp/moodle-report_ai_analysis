@@ -103,6 +103,11 @@ class provider_factory {
                 continue;
             }
 
+            // Skip base_provider itself (it's abstract).
+            if ($classname === '\\report_ai_analysis\\provider\\base_provider') {
+                continue;
+            }
+
             if (!is_subclass_of($classname, base_provider::class)) {
                 debugging("Class {$classname} is not a subclass of base_provider", DEBUG_DEVELOPER);
                 continue;

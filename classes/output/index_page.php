@@ -75,7 +75,7 @@ class index_page implements renderable, templatable {
         }
 
         // Render reports table.
-        $baseurl = new \moodle_url('/report/ai_analysis/index.php', ['courseid' => $this->courseid]);
+        $baseurl = new \moodle_url('/report/ai_analysis/index.php', ['id' => $this->courseid]);
 
         $table = new reports_table($context, $baseurl);
         ob_start();

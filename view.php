@@ -22,7 +22,11 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-require_once(__DIR__ . '/../../config.php');
+require_once('../../config.php');
+
+use moodle_url;
+use html_writer;
+use context_course;
 
 use report_ai_analysis\output\view_page;
 
@@ -79,12 +83,12 @@ if ($action === 'delete') {
                 break;
         }
 
-        redirect(
-            new moodle_url('/report/ai_analysis/index.php', $redirectparams),
-            get_string('reportdeleted', 'report_ai_analysis'),
-            null,
-            \core\output\notification::NOTIFY_SUCCESS
-        );
+            redirect(
+                new moodle_url('/report/ai_analysis/index.php', $redirectparams),
+                get_string('reportdeleted', 'report_ai_analysis'),
+                null,
+                \core\output\notification::NOTIFY_SUCCESS
+            );
     }
 
     // Show confirmation page.
@@ -104,13 +108,18 @@ if ($action === 'delete') {
         'confirm' => 1,
         'sesskey' => sesskey(),
     ]);
-    $cancelurl = new moodle_url('/report/ai_analysis/view.php', ['id' => $id]);
+        $cancelurl = new moodle_url('/report/ai_analysis/index.php', ['id' => $context->instanceid]);
 
-    echo $OUTPUT->confirm(
-        get_string('confirmdelete', 'report_ai_analysis', $report->title),
-        $confirmurl,
-        $cancelurl
-    );
+        echo $OUTPUT->box(
+            get_string('confirmdelete', 'report_ai_analysis', s($report->title)),
+            'generalbox',
+            'confirmdeletebox'
+        );
+        echo html_writer::start_div('mb-3');
+        echo html_writer::link($confirmurl, get_string('delete', 'report_ai_analysis'), ['class' => 'btn btn-danger']);
+        echo ' ';
+        echo html_writer::link($cancelurl, get_string('cancel', 'report_ai_analysis'), ['class' => 'btn btn-secondary']);
+        echo html_writer::end_div();
 
     echo $OUTPUT->footer();
     exit;
