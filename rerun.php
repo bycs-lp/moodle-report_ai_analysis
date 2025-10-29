@@ -65,7 +65,17 @@ if (!$confirm) {
         'confirm' => 1,
         'sesskey' => sesskey(),
     ]);
-    $cancelurl = new moodle_url('/report/ai_analysis/view.php', ['id' => $id]);
+
+    // Build cancel URL to index page based on context.
+    $indexparams = [];
+    if ($context->contextlevel === CONTEXT_COURSE) {
+        $indexparams['id'] = $context->instanceid;
+    } else if ($context->contextlevel === CONTEXT_MODULE) {
+        $indexparams['cmid'] = $context->instanceid;
+    } else if ($context->contextlevel === CONTEXT_COURSECAT) {
+        $indexparams['categoryid'] = $context->instanceid;
+    }
+    $cancelurl = new moodle_url('/report/ai_analysis/index.php', $indexparams);
 
     echo $OUTPUT->confirm(
         get_string('rerunreportconfirm', 'report_ai_analysis', format_string($report->title)),
@@ -101,9 +111,19 @@ try {
 
     $transaction->allow_commit();
 
-    // Redirect to view page with success message.
+    // Build redirect URL to index page based on context.
+    $indexparams = [];
+    if ($context->contextlevel === CONTEXT_COURSE) {
+        $indexparams['id'] = $context->instanceid;
+    } else if ($context->contextlevel === CONTEXT_MODULE) {
+        $indexparams['cmid'] = $context->instanceid;
+    } else if ($context->contextlevel === CONTEXT_COURSECAT) {
+        $indexparams['categoryid'] = $context->instanceid;
+    }
+
+    // Redirect to index page with success message.
     redirect(
-        new moodle_url('/report/ai_analysis/view.php', ['id' => $id]),
+        new moodle_url('/report/ai_analysis/index.php', $indexparams),
         get_string('reportrerunsuccess', 'report_ai_analysis'),
         null,
         \core\output\notification::NOTIFY_SUCCESS

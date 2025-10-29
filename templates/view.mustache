@@ -102,6 +102,9 @@
         </div>
         <div class="card-body">
             <dl class="row">
+                <dt class="col-sm-3">{{#str}}status, report_ai_analysis{{/str}}</dt>
+                <dd class="col-sm-9">{{statustext}}</dd>
+
                 <dt class="col-sm-3">{{#str}}context_system, report_ai_analysis{{/str}}</dt>
                 <dd class="col-sm-9">{{contextname}}</dd>
 
@@ -161,6 +164,16 @@
     </div>
     {{/haveresult}}
 
+    {{^haveresult}}
+    {{#status}}
+    <div class="card mb-3">
+        <div class="card-body">
+            <p>{{#str}}aimodel, report_ai_analysis{{/str}}: {{aimodel}}</p>
+        </div>
+    </div>
+    {{/status}}
+    {{/haveresult}}
+
     {{#haserror}}
     <div class="alert alert-danger">
         <h5>{{#str}}error, moodle{{/str}}</h5>
@@ -194,7 +207,7 @@
             </a>
             {{/canrerun}}
             {{#candelete}}
-            <a href="{{{deleteurl}}}" class="btn btn-danger" onclick="return confirm('{{#str}}confirmdeletion, report_ai_analysis{{/str}}');">
+            <a href="{{{deleteurl}}}" class="btn btn-danger" id="delete-report-btn" role="button">
                 {{#str}}delete, report_ai_analysis{{/str}}
             </a>
             {{/candelete}}

@@ -135,15 +135,15 @@ function export_html($report, $context) {
                         $items[] = s($item);
                     }
                 }
-                $scopeitems[] = html_writer::tag(
-                    'li',
-                    html_writer::tag('strong', s($key) . ':') . ' ' . implode(', ', $items)
-                );
+                // Construct the content using html_writer consistently.
+                $content = html_writer::tag('strong', s($key) . ':') . ' ' .
+                           html_writer::tag('span', implode(', ', $items));
+                $scopeitems[] = html_writer::tag('li', $content);
             } else {
-                $scopeitems[] = html_writer::tag(
-                    'li',
-                    html_writer::tag('strong', s($key) . ':') . ' ' . s($value)
-                );
+                // Construct the content using html_writer consistently.
+                $content = html_writer::tag('strong', s($key) . ':') . ' ' .
+                           html_writer::tag('span', s($value));
+                $scopeitems[] = html_writer::tag('li', $content);
             }
         }
     }

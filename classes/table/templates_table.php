@@ -125,7 +125,8 @@ class templates_table extends table_sql {
 
         // Move up action.
         $moveupurl = new moodle_url('/report/ai_analysis/manage_templates.php', [
-            'action' => 'moveup',
+            'action' => 'move',
+            'direction' => 'up',
             'id' => $row->id,
             'sesskey' => sesskey(),
         ]);
@@ -134,7 +135,8 @@ class templates_table extends table_sql {
 
         // Move down action.
         $movedownurl = new moodle_url('/report/ai_analysis/manage_templates.php', [
-            'action' => 'movedown',
+            'action' => 'move',
+            'direction' => 'down',
             'id' => $row->id,
             'sesskey' => sesskey(),
         ]);
@@ -144,7 +146,7 @@ class templates_table extends table_sql {
         // Toggle enabled action.
         if ($row->enabled) {
             $toggleurl = new moodle_url('/report/ai_analysis/manage_templates.php', [
-                'action' => 'disable',
+                'action' => 'toggle',
                 'id' => $row->id,
                 'sesskey' => sesskey(),
             ]);
@@ -152,7 +154,7 @@ class templates_table extends table_sql {
             $actions[] = html_writer::link($toggleurl, $OUTPUT->render($toggleicon));
         } else {
             $toggleurl = new moodle_url('/report/ai_analysis/manage_templates.php', [
-                'action' => 'enable',
+                'action' => 'toggle',
                 'id' => $row->id,
                 'sesskey' => sesskey(),
             ]);
