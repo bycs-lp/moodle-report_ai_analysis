@@ -277,6 +277,8 @@ if ($mform->is_cancelled()) {
 echo $OUTPUT->header();
 if ($isedit && $report) {
     echo $OUTPUT->heading(get_string('editreport', 'report_ai_analysis') . ': ' . s($report->title));
+} else {
+    echo $OUTPUT->heading(get_string('createanalysis', 'report_ai_analysis'));
 }
 $mform->display();
 echo $OUTPUT->footer();
