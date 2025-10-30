@@ -1,0 +1,21 @@
+# Moodle Plugin Code Owners
+# GitHub Copilot will be automatically added as a reviewer for all relevant files
+
+# PHP Files - Copilot Review
+*.php @copilot
+
+# JavaScript Files - Copilot Review
+*.js @copilot
+
+# Mustache Templates - Copilot Review
+*.mustache @copilot
+
+# Database Schema - Copilot Review
+db/*.xml @copilot
+db/*.php @copilot
+
+# Language Files - Copilot Review
+lang/**/*.php @copilot
+
+# Version and Upgrade Files - Copilot Review
+version.php @copilot

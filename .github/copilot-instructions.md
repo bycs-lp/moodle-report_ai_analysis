@@ -69,7 +69,6 @@ try {
   - ✅ **Require**: `confirm_sesskey()` in form processing
 
 #### 2. Moodle Standards Compliance
-- ❌ **Reject**: Missing `defined('MOODLE_INTERNAL') || die();` in PHP files
 - ❌ **Reject**: Incomplete PHPDoc blocks (missing @package, @copyright, @license)
 - ❌ **Reject**: Hardcoded strings in code
   - ✅ **Require**: `get_string('key', 'report_ai_analysis')` + lang file entry
