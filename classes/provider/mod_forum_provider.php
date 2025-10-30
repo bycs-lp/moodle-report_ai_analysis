@@ -375,8 +375,8 @@ class mod_forum_provider extends base_provider {
             $message = trim($message);
 
             // Limit very long messages.
-            if (strlen($message) > 2000) {
-                $message = substr($message, 0, 2000) . '... ' . get_string('export_truncated', 'report_ai_analysis');
+            if (\core_text::strlen($message) > 2000) {
+                $message = \core_text::substr($message, 0, 2000) . '... ' . get_string('export_truncated', 'report_ai_analysis');
             }
 
             $output[] = $indent . $message;
