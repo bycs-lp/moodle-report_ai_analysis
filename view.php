@@ -88,7 +88,7 @@ if ($action === 'delete') {
                 get_string('reportdeleted', 'report_ai_analysis'),
                 null,
                 \core\output\notification::NOTIFY_SUCCESS
-            );
+        );
     }
 
     // Show confirmation page.
