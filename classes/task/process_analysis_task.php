@@ -41,6 +41,15 @@ class process_analysis_task extends adhoc_task {
     private const AI_PURPOSE = 'singleprompt';
 
     /**
+     * Maximum raw data length in bytes (hard cap to prevent memory issues).
+     *
+     * This hard limit protects against excessive memory usage and database storage
+     * issues. 500KB is sufficient for debugging while staying well under typical
+     * database TEXT field limits (64KB-16MB depending on configuration).
+     */
+    private const MAX_RAW_DATA_LENGTH = 500000;
+
+    /**
      * Get task name.
      *
      * @return string Task name
@@ -141,8 +150,8 @@ class process_analysis_task extends adhoc_task {
             if ($storerawdata) {
                 $maxlength = (int) get_config('report_ai_analysis', 'truncate_raw_data_length');
                 // Apply hard cap to prevent memory issues.
-                if ($maxlength <= 0 || $maxlength > 500000) {
-                    $maxlength = 500000;
+                if ($maxlength <= 0 || $maxlength > self::MAX_RAW_DATA_LENGTH) {
+                    $maxlength = self::MAX_RAW_DATA_LENGTH;
                 }
                 $report->raw_data = \core_text::substr($conversationdata, 0, $maxlength);
             }
