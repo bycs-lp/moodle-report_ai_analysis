@@ -18,7 +18,8 @@
  * Data collector for AI conversation and discussion data.
  *
  * @package    report_ai_analysis
- * @copyright  2025 PeMaSoft, Dr. Peter Mayer
+ * @copyright  2025 ISB Bayern
+ * @author     Dr. Peter Mayer
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
@@ -27,14 +28,7 @@ namespace report_ai_analysis;
 use report_ai_analysis\provider\provider_factory;
 
 /**
- * Collects structured conversation and discussion data.
- *
- * This collector uses a provider pattern to delegate collection to specific
- * data source providers. Providers are automatically discovered and instantiated
- * based on available plugins and scope requirements.
- *
- * @copyright  2025 PeMaSoft, Dr. Peter Mayer
- * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * Collects conversation data using provider pattern.
  */
 class data_collector {
     /** @var scope_builder The scope builder */

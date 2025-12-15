@@ -18,7 +18,8 @@
  * Output class for view page.
  *
  * @package    report_ai_analysis
- * @copyright  2025 PeMaSoft, Dr. Peter Mayer
+ * @copyright  2025 ISB Bayern
+ * @author     Dr. Peter Mayer
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
@@ -32,7 +33,8 @@ use report_ai_analysis\scope_builder;
 /**
  * View page output class.
  *
- * @copyright  2025 PeMaSoft, Dr. Peter Mayer
+ * @copyright  2025 ISB Bayern
+ * @author     Dr. Peter Mayer
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class view_page implements renderable, templatable {

@@ -19,7 +19,8 @@
  *
  * @package    report_ai_analysis
  * @category   test
- * @copyright  2025 PeMaSoft, Dr. Peter Mayer
+ * @copyright  2025 ISB Bayern
+ * @author     Dr. Peter Mayer
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
@@ -27,7 +28,8 @@
  * Behat data generator class for report_ai_analysis.
  *
  * @package    report_ai_analysis
- * @copyright  2025 PeMaSoft, Dr. Peter Mayer
+ * @copyright  2025 ISB Bayern
+ * @author     Dr. Peter Mayer
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class behat_report_ai_analysis_generator extends behat_generator_base {
@@ -41,8 +43,8 @@ class behat_report_ai_analysis_generator extends behat_generator_base {
             'reports' => [
                 'singular' => 'report',
                 'datagenerator' => 'report',
-                'required' => ['title', 'course', 'userid', 'prompt'],
-                'switchids' => ['course' => 'courseid', 'userid' => 'userid'],
+                'required' => ['title', 'course', 'user', 'prompt'],
+                'switchids' => ['course' => 'courseid', 'user' => 'userid'],
             ],
             'templates' => [
                 'singular' => 'template',
@@ -58,7 +60,7 @@ class behat_report_ai_analysis_generator extends behat_generator_base {
      * @param string $username
      * @return int corresponding id.
      */
-    protected function get_userid_id(string $username): int {
+    protected function get_user_id($username) {
         global $DB;
         return $DB->get_field('user', 'id', ['username' => $username], MUST_EXIST);
     }

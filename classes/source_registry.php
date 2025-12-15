@@ -18,7 +18,8 @@
  * Registry for supported analysis sources.
  *
  * @package    report_ai_analysis
- * @copyright  2025 PeMaSoft, Dr. Peter Mayer
+ * @copyright  2025 ISB Bayern
+ * @author     Dr. Peter Mayer
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
@@ -30,7 +31,8 @@ namespace report_ai_analysis;
  * Defines which plugins/components can be analyzed and maintains
  * a whitelist for security and future extensibility.
  *
- * @copyright  2025 PeMaSoft, Dr. Peter Mayer
+ * @copyright  2025 ISB Bayern
+ * @author     Dr. Peter Mayer
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class source_registry {

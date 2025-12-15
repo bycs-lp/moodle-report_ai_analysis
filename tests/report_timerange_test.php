@@ -18,7 +18,8 @@
  * Test for report timerange functionality.
  *
  * @package    report_ai_analysis
- * @copyright  2025 PeMaSoft, Dr. Peter Mayer
+ * @copyright  2025 ISB Bayern
+ * @author     Dr. Peter Mayer
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
@@ -33,7 +34,8 @@ use stdClass;
  * Test class for timerange functionality in AI analysis reports.
  *
  * @package    report_ai_analysis
- * @copyright  2025 PeMaSoft, Dr. Peter Mayer
+ * @copyright  2025 ISB Bayern
+ * @author     Dr. Peter Mayer
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  * @covers     \report_ai_analysis\scope_builder
  */

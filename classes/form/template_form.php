@@ -26,7 +26,8 @@ require_once($CFG->libdir . '/formslib.php');
  * Form for creating/editing prompt templates.
  *
  * @package    report_ai_analysis
- * @copyright  2025 PeMaSoft, Dr. Peter Mayer
+ * @copyright  2025 ISB Bayern
+ * @author     Dr. Peter Mayer
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class template_form extends moodleform {

@@ -18,21 +18,15 @@
  * Scope builder for AI analysis reports.
  *
  * @package    report_ai_analysis
- * @copyright  2025 PeMaSoft, Dr. Peter Mayer
+ * @copyright  2025 ISB Bayern
+ * @author     Dr. Peter Mayer
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 namespace report_ai_analysis;
 
 /**
- * Builds scope definitions for AI analysis in course context.
- *
- * Defines which data sources (activities, blocks, forums, etc.) to include
- * based on course and filters. Supports flexible source types through
- * the source_registry whitelist system.
- *
- * @copyright  2025 PeMaSoft, Dr. Peter Mayer
- * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * Builds scope definitions for AI analysis.
  */
 class scope_builder {
     /**

@@ -18,7 +18,8 @@
  * Edit or create a prompt template.
  *
  * @package    report_ai_analysis
- * @copyright  2025 PeMaSoft, Dr. Peter Mayer
+ * @copyright  2025 ISB Bayern
+ * @author     Dr. Peter Mayer
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
@@ -26,7 +27,6 @@ require_once(__DIR__ . '/../../config.php');
 require_once($CFG->libdir . '/adminlib.php');
 
 use report_ai_analysis\form\template_form;
-use report_ai_analysis\template_manager;
 
 $templateid = optional_param('id', 0, PARAM_INT);
 
@@ -44,7 +44,7 @@ $template = null;
 $pagetitle = get_string('add_template', 'report_ai_analysis');
 
 if ($templateid) {
-    $template = template_manager::get_template($templateid);
+    $template = report_ai_analysis_get_template($templateid);
     $pagetitle = get_string('edit_template', 'report_ai_analysis');
 }
 
@@ -58,7 +58,7 @@ if ($mform->is_cancelled()) {
     redirect($returnurl);
 } else if ($data = $mform->get_data()) {
     try {
-        $templateid = template_manager::save_template($data);
+        $templateid = report_ai_analysis_save_template($data);
 
         $message = empty($data->id) ?
             get_string('template_created', 'report_ai_analysis') :

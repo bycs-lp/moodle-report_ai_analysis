@@ -15,7 +15,7 @@ Feature: Re-run AI Analysis Reports
       | user     | course | role           |
       | teacher1 | C1     | editingteacher |
     And the following "report_ai_analysis > reports" exist:
-      | title              | course | userid   | status    | prompt                    |
+      | title              | course | user     | status    | prompt                    |
       | Completed Report   | C1     | teacher1 | completed | Completed analysis        |
       | Failed Report      | C1     | teacher1 | failed    | Failed analysis           |
       | Cancelled Report   | C1     | teacher1 | cancelled | Cancelled analysis        |

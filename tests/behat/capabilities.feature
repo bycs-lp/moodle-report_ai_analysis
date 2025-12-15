@@ -35,7 +35,7 @@ Feature: Permissions and Capabilities
 
   Scenario: Teacher (non-editing) cannot delete by default
     Given the following "report_ai_analysis > reports" exist:
-      | title        | course | userid   | status    | prompt    |
+      | title        | course | user     | status    | prompt    |
       | Test Report  | C1     | teacher2 | completed | Analysis  |
     And I am on the "Course 1" "Course" page logged in as "teacher2"
     When I navigate to "Reports > AI Conversation Analysis" in current page administration
@@ -63,7 +63,7 @@ Feature: Permissions and Capabilities
 
   Scenario: Teacher without delete capability cannot delete
     Given the following "report_ai_analysis > reports" exist:
-      | title        | course | userid   | status    | prompt    |
+      | title        | course | user     | status    | prompt    |
       | Test Report  | C1     | teacher1 | completed | Analysis  |
     And the following "permission overrides" exist:
       | capability                  | permission | role           | contextlevel | reference |
@@ -74,7 +74,7 @@ Feature: Permissions and Capabilities
 
   Scenario: Teacher without rerun capability cannot re-run
     Given the following "report_ai_analysis > reports" exist:
-      | title        | course | userid   | status    | prompt    |
+      | title        | course | user     | status    | prompt    |
       | Test Report  | C1     | teacher1 | completed | Analysis  |
     And the following "permission overrides" exist:
       | capability                  | permission | role           | contextlevel | reference |

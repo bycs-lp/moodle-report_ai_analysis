@@ -17,12 +17,12 @@ Feature: Export AI Analysis Reports
       | teacher1 | C1     | editingteacher |
       | manager1 | C1     | manager        |
     And the following "report_ai_analysis > reports" exist:
-      | title              | course | userid   | status    | prompt            | ai_result          |
+      | title              | course | user     | status    | prompt            | ai_result          |
       | Export Test Report | C1     | teacher1 | completed | Test for export   | This is the result |
 
   Scenario: Pending reports cannot be exported
     Given the following "report_ai_analysis > reports" exist:
-      | title           | course | userid   | status  | prompt          |
+      | title           | course | user     | status  | prompt          |
       | Pending Report  | C1     | teacher1 | pending | Not yet ready   |
     And I am on the "Course 1" "Course" page logged in as "teacher1"
     And I navigate to "Reports > AI Conversation Analysis" in current page administration

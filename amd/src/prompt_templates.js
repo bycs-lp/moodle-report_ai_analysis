@@ -17,7 +17,8 @@
  * Prompt templates JavaScript module.
  *
  * @module     report_ai_analysis/prompt_templates
- * @copyright  2025 PeMaSoft, Dr. Peter Mayer
+ * @copyright  2025 ISB Bayern
+ * @author     Dr. Peter Mayer
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 

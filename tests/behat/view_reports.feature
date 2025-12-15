@@ -17,7 +17,7 @@ Feature: View AI Analysis Reports
       | teacher1 | C1     | editingteacher |
       | manager1 | C1     | manager        |
     And the following "report_ai_analysis > reports" exist:
-      | title              | course | userid   | status    | prompt                    |
+      | title              | course | user     | status    | prompt                    |
       | Completed Analysis | C1     | teacher1 | completed | Analyze conversations     |
       | Pending Analysis   | C1     | teacher1 | pending   | Waiting for processing    |
       | Failed Analysis    | C1     | teacher1 | failed    | This analysis failed      |
@@ -48,7 +48,7 @@ Feature: View AI Analysis Reports
 
   Scenario: Reports table supports pagination
     Given the following "report_ai_analysis > reports" exist:
-      | title      | course | userid   | status    | prompt    |
+      | title      | course | user     | status    | prompt    |
       | Report 01  | C1     | teacher1 | completed | Analysis  |
       | Report 02  | C1     | teacher1 | completed | Analysis  |
       | Report 03  | C1     | teacher1 | completed | Analysis  |

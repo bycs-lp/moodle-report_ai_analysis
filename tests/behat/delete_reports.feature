@@ -19,7 +19,7 @@ Feature: Delete AI Analysis Reports
       | teacher2 | C1     | editingteacher |
       | manager1 | C1     | manager        |
     And the following "report_ai_analysis > reports" exist:
-      | title              | course | userid   | status    | prompt                |
+      | title              | course | user     | status    | prompt                |
       | Report to Delete   | C1     | teacher1 | completed | Test analysis         |
       | Another Report     | C1     | teacher1 | pending   | Another test          |
       | Teacher2 Report    | C1     | teacher2 | completed | Teacher 2's analysis  |

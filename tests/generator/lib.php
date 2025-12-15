@@ -19,7 +19,8 @@
  *
  * @package    report_ai_analysis
  * @category   test
- * @copyright  2025 PeMaSoft, Dr. Peter Mayer
+ * @copyright  2025 ISB Bayern
+ * @author     Dr. Peter Mayer
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class report_ai_analysis_generator extends component_generator_base {
