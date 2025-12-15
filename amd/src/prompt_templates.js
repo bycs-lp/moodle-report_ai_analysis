@@ -21,37 +21,44 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-define(['jquery'], function($) {
+/**
+ * Initialize prompt templates for dropdown variant.
+ *
+ * @param {Object} templates Template data indexed by template ID
+ */
+export const init = (templates) => {
+    const selector = document.getElementById('id_template_selector');
+    const promptField = document.getElementById('id_prompt');
 
-    /**
-     * Initialize prompt templates for dropdown variant.
-     *
-     * @param {Object} templates Template data indexed by template ID
-     */
-    var init = function(templates) {
-        $('#id_template_selector').on('change', function() {
-            var selectedId = $(this).val();
-            if (selectedId && templates[selectedId]) {
-                $('#id_prompt').val(templates[selectedId].prompt);
-            }
-        });
-    };
+    if (!selector || !promptField) {
+        return;
+    }
 
-    /**
-     * Initialize prompt templates for button variant.
-     */
-    var initButtons = function() {
-        $('.prompt-template-btn').on('click', function(e) {
+    selector.addEventListener('change', () => {
+        const selectedId = selector.value;
+        if (selectedId && templates[selectedId]) {
+            promptField.value = templates[selectedId].prompt;
+        }
+    });
+};
+
+/**
+ * Initialize prompt templates for button variant.
+ */
+export const initButtons = () => {
+    const promptField = document.getElementById('id_prompt');
+
+    if (!promptField) {
+        return;
+    }
+
+    document.querySelectorAll('.prompt-template-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
             e.preventDefault();
-            var prompt = $(this).data('prompt');
+            const prompt = btn.dataset.prompt;
             if (prompt) {
-                $('#id_prompt').val(prompt);
+                promptField.value = prompt;
             }
         });
-    };
-
-    return {
-        init: init,
-        initButtons: initButtons
-    };
-});
+    });
+};
