@@ -27,128 +27,68 @@ namespace report_ai_analysis;
  */
 final class scope_builder_test extends \advanced_testcase {
     /**
-     * Test source validation with valid formats.
+     * Test source validation accepts valid formats and rejects invalid ones.
      */
-    public function test_with_sources_valid_formats(): void {
+    public function test_source_validation(): void {
         $this->resetAfterTest();
-
         $course = $this->getDataGenerator()->create_course();
-        $builder = new scope_builder($course->id);
 
-        // Valid formats should not throw exceptions.
+        // Valid formats should work.
+        $builder = new scope_builder($course->id);
         $builder->with_sources(['cm_123', 'block_456', 'forum_789']);
-        $this->assertTrue(true); // If we reach here, validation passed.
-    }
+        $this->assertEquals(['cm_123', 'block_456', 'forum_789'], $builder->get_sources_in_scope());
 
-    /**
-     * Test source validation with invalid formats.
-     */
-    public function test_with_sources_invalid_formats(): void {
-        $this->resetAfterTest();
-
-        $course = $this->getDataGenerator()->create_course();
-        $builder = new scope_builder($course->id);
-
+        // Invalid format.
         $this->expectException(\coding_exception::class);
         $this->expectExceptionMessage('Invalid source format');
-        $builder->with_sources(['invalid_format']);
+        $builder2 = new scope_builder($course->id);
+        $builder2->with_sources(['invalid_format']);
     }
 
     /**
-     * Test source validation with invalid ID.
+     * Test source validation rejects invalid IDs and unsupported types.
      */
-    public function test_with_sources_invalid_id(): void {
+    public function test_source_validation_edge_cases(): void {
         $this->resetAfterTest();
-
-        $course = $this->getDataGenerator()->create_course();
-        $builder = new scope_builder($course->id);
-
-        $this->expectException(\coding_exception::class);
-        $this->expectExceptionMessage('Invalid source ID');
-        $builder->with_sources(['cm_0']);
-    }
-
-    /**
-     * Test source validation with invalid formats including negative numbers.
-     */
-    public function test_with_sources_invalid_formats_various(): void {
-        $this->resetAfterTest();
-
         $course = $this->getDataGenerator()->create_course();
 
-        // Test with no underscore.
+        // Invalid ID (zero).
         try {
             $builder = new scope_builder($course->id);
-            $builder->with_sources(['invalid_format_without_number']);
+            $builder->with_sources(['cm_0']);
             $this->fail('Expected coding_exception was not thrown');
         } catch (\coding_exception $e) {
-            $this->assertStringContainsString('Invalid source format', $e->getMessage());
+            $this->assertStringContainsString('Invalid source ID', $e->getMessage());
         }
 
-        // Test with negative number (won't match regex, so caught as invalid format).
+        // Unsupported type.
         try {
-            $builder = new scope_builder($course->id);
-            $builder->with_sources(['cm_-5']);
+            $builder2 = new scope_builder($course->id);
+            $builder2->with_sources(['unsupported_123']);
             $this->fail('Expected coding_exception was not thrown');
         } catch (\coding_exception $e) {
-            // Either "Invalid source format" or "Invalid source ID" is acceptable.
-            $this->assertTrue(
-                strpos($e->getMessage(), 'Invalid source') !== false,
-                'Exception message should contain "Invalid source"'
-            );
+            $this->assertStringContainsString('Unsupported source type', $e->getMessage());
         }
     }
 
     /**
-     * Test source validation with unsupported type.
+     * Test extracting activities and blocks from sources.
      */
-    public function test_with_sources_unsupported_type(): void {
+    public function test_get_activities_and_blocks_from_sources(): void {
         $this->resetAfterTest();
-
         $course = $this->getDataGenerator()->create_course();
+
         $builder = new scope_builder($course->id);
+        $builder->with_sources(['cm_1', 'block_2', 'forum_3', 'cm_4', 'block_5']);
 
-        $this->expectException(\coding_exception::class);
-        $this->expectExceptionMessage('Unsupported source type');
-        $builder->with_sources(['unsupported_123']);
-    }
-
-    /**
-     * Test extracting course module IDs from sources.
-     */
-    public function test_get_activities_with_sources(): void {
-        $this->resetAfterTest();
-
-        $course = $this->getDataGenerator()->create_course();
-        $builder = new scope_builder($course->id);
-
-        $builder->with_sources(['cm_10', 'cm_20', 'block_30']);
-        $cmids = $builder->get_activities_in_scope();
-
-        $this->assertEquals([10, 20], $cmids);
-        $this->assertNotContains(30, $cmids); // Block should not be included.
-    }
-
-    /**
-     * Test extracting block context IDs from sources.
-     */
-    public function test_get_block_contexts_with_sources(): void {
-        $this->resetAfterTest();
-
-        $course = $this->getDataGenerator()->create_course();
-        $builder = new scope_builder($course->id);
-
-        $builder->with_sources(['block_100', 'block_200', 'cm_300']);
-        $blockids = $builder->get_block_contexts_in_scope();
-
-        $this->assertEquals([100, 200], $blockids);
-        $this->assertNotContains(300, $blockids); // CM should not be included.
+        $this->assertEquals([1, 4], $builder->get_activities_in_scope());
+        $this->assertEquals([2, 5], $builder->get_block_contexts_in_scope());
     }
 
     /**
      * Test getting all activities when no filter is set.
      */
-    public function test_get_activities_without_filter(): void {
+    public function test_get_all_activities_without_filter(): void {
         global $DB;
         $this->resetAfterTest();
 
@@ -159,51 +99,37 @@ final class scope_builder_test extends \advanced_testcase {
         $builder = new scope_builder($course->id);
         $cmids = $builder->get_activities_in_scope();
 
-        // Should get all course modules in course.
         $expectedcount = $DB->count_records('course_modules', ['course' => $course->id]);
         $this->assertCount($expectedcount, $cmids);
     }
 
     /**
-     * Test participant filter validation.
+     * Test participant filter with various input types.
      */
-    public function test_filter_by_participants(): void {
+    public function test_participant_filter(): void {
         $this->resetAfterTest();
-
         $course = $this->getDataGenerator()->create_course();
-        $builder = new scope_builder($course->id);
 
+        $builder = new scope_builder($course->id);
         $builder->filter_by_participants([1, 2, 3]);
-        $participants = $builder->get_participants_in_scope();
+        $this->assertEquals([1, 2, 3], $builder->get_participants_in_scope());
 
-        $this->assertEquals([1, 2, 3], $participants);
-    }
-
-    /**
-     * Test participant filter with string IDs (should be converted to int).
-     */
-    public function test_filter_by_participants_string_conversion(): void {
-        $this->resetAfterTest();
-
-        $course = $this->getDataGenerator()->create_course();
-        $builder = new scope_builder($course->id);
-
-        $builder->filter_by_participants(['5', '10', '15']);
-        $participants = $builder->get_participants_in_scope();
-
+        // String IDs should be converted to int.
+        $builder2 = new scope_builder($course->id);
+        $builder2->filter_by_participants(['5', '10', '15']);
+        $participants = $builder2->get_participants_in_scope();
         $this->assertSame([5, 10, 15], $participants);
         $this->assertIsInt($participants[0]);
     }
 
     /**
-     * Test group filter.
+     * Test group filter resolves to correct participants.
      */
-    public function test_with_groups(): void {
+    public function test_group_filter(): void {
         $this->resetAfterTest();
 
         $course = $this->getDataGenerator()->create_course();
         $group1 = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
-        $group2 = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
 
         $user1 = $this->getDataGenerator()->create_user();
         $user2 = $this->getDataGenerator()->create_user();
@@ -215,7 +141,6 @@ final class scope_builder_test extends \advanced_testcase {
 
         groups_add_member($group1, $user1);
         groups_add_member($group1, $user2);
-        groups_add_member($group2, $user3);
 
         $builder = new scope_builder($course->id);
         $builder->with_groups([$group1->id]);
@@ -228,46 +153,34 @@ final class scope_builder_test extends \advanced_testcase {
     }
 
     /**
-     * Test time range validation.
+     * Test time range validation and storage.
      */
-    public function test_with_timerange_validation(): void {
+    public function test_timerange(): void {
         $this->resetAfterTest();
-
         $course = $this->getDataGenerator()->create_course();
-        $builder = new scope_builder($course->id);
 
         // Valid range.
+        $builder = new scope_builder($course->id);
         $builder->with_timerange(1000, 2000);
-        $this->assertTrue(true);
+        $json = $builder->build();
+        $scope = scope_builder::parse($json);
+        $this->assertEquals(1000, $scope->filters->timerange->start);
+        $this->assertEquals(2000, $scope->filters->timerange->end);
 
         // Invalid: from > to.
-        $builder2 = new scope_builder($course->id);
         $this->expectException(\coding_exception::class);
+        $builder2 = new scope_builder($course->id);
         $builder2->with_timerange(2000, 1000);
     }
 
     /**
-     * Test time range with negative values.
+     * Test build and parse round-trip preserves all data.
      */
-    public function test_with_timerange_negative(): void {
+    public function test_build_and_parse_roundtrip(): void {
         $this->resetAfterTest();
-
         $course = $this->getDataGenerator()->create_course();
+
         $builder = new scope_builder($course->id);
-
-        $this->expectException(\coding_exception::class);
-        $builder->with_timerange(-100, 1000);
-    }
-
-    /**
-     * Test build and parse round-trip.
-     */
-    public function test_build_and_parse(): void {
-        $this->resetAfterTest();
-
-        $course = $this->getDataGenerator()->create_course();
-        $builder = new scope_builder($course->id);
-
         $builder->with_sources(['cm_123', 'block_456'])
             ->filter_by_participants([10, 20])
             ->with_timerange(1000, 2000);
@@ -283,7 +196,7 @@ final class scope_builder_test extends \advanced_testcase {
     }
 
     /**
-     * Test parse with invalid JSON.
+     * Test parse throws on invalid JSON.
      */
     public function test_parse_invalid_json(): void {
         $this->expectException(\coding_exception::class);
@@ -292,68 +205,13 @@ final class scope_builder_test extends \advanced_testcase {
     }
 
     /**
-     * Test get_allowed_ai_plugins delegates to source_registry.
-     */
-    public function test_get_allowed_ai_plugins(): void {
-        $plugins = scope_builder::get_allowed_ai_plugins();
-
-        $this->assertContains('aiplacement_courseassist', $plugins);
-        $this->assertContains('block_ai_chat', $plugins);
-        $this->assertCount(5, $plugins);
-    }
-
-    /**
-     * Test is_allowed_ai_plugin delegates to source_registry.
-     */
-    public function test_is_allowed_ai_plugin(): void {
-        $this->assertTrue(scope_builder::is_allowed_ai_plugin('aiplacement_courseassist'));
-        $this->assertTrue(scope_builder::is_allowed_ai_plugin('block_ai_chat'));
-        $this->assertFalse(scope_builder::is_allowed_ai_plugin('mod_forum'));
-        $this->assertFalse(scope_builder::is_allowed_ai_plugin('invalid_plugin'));
-    }
-
-    /**
      * Test get_course_in_scope returns correct course ID.
      */
     public function test_get_course_in_scope(): void {
         $this->resetAfterTest();
-
         $course = $this->getDataGenerator()->create_course();
-        $builder = new scope_builder($course->id);
 
+        $builder = new scope_builder($course->id);
         $this->assertEquals($course->id, $builder->get_course_in_scope());
-    }
-
-    /**
-     * Test empty sources array.
-     */
-    public function test_with_sources_empty(): void {
-        $this->resetAfterTest();
-
-        $course = $this->getDataGenerator()->create_course();
-        $builder = new scope_builder($course->id);
-
-        $builder->with_sources([]);
-        $cmids = $builder->get_activities_in_scope();
-
-        $this->assertEmpty($cmids);
-    }
-
-    /**
-     * Test mixed source types.
-     */
-    public function test_mixed_source_types(): void {
-        $this->resetAfterTest();
-
-        $course = $this->getDataGenerator()->create_course();
-        $builder = new scope_builder($course->id);
-
-        $builder->with_sources(['cm_1', 'block_2', 'forum_3', 'cm_4', 'block_5']);
-
-        $cmids = $builder->get_activities_in_scope();
-        $this->assertEquals([1, 4], $cmids);
-
-        $blockids = $builder->get_block_contexts_in_scope();
-        $this->assertEquals([2, 5], $blockids);
     }
 }

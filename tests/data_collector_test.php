@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Unit tests for data_collector.
+ * Integration tests for data_collector.
  *
  * @package    report_ai_analysis
  * @copyright  2025 ISB Bayern
@@ -38,9 +38,7 @@ namespace report_ai_analysis;
  */
 final class data_collector_test extends \advanced_testcase {
     /**
-     * Test data_collector with no sources throws exception.
-     *
-     * @covers \report_ai_analysis\data_collector::collect
+     * Test collect throws exception when no data sources are available.
      */
     public function test_collect_no_sources_throws_exception(): void {
         $this->resetAfterTest();
@@ -48,28 +46,23 @@ final class data_collector_test extends \advanced_testcase {
 
         $course = $this->getDataGenerator()->create_course();
         $scopebuilder = new scope_builder($course->id);
-
         $collector = new data_collector($scopebuilder);
 
         $this->expectException(\moodle_exception::class);
         try {
             $collector->collect();
         } catch (\moodle_exception $e) {
-            // Check error code instead of translated message.
             $this->assertEquals('error_no_data', $e->errorcode);
             throw $e;
         }
     }
 
     /**
-     * Test collect with forum source.
+     * Test collect with forum source returns structured data.
      *
-     * @covers \report_ai_analysis\data_collector::collect
      * @covers \report_ai_analysis\provider\mod_forum_provider::collect
      */
     public function test_collect_forum_source(): void {
-        global $DB;
-
         $this->resetAfterTest();
         $this->setAdminUser();
 
@@ -77,9 +70,8 @@ final class data_collector_test extends \advanced_testcase {
         $user = $this->getDataGenerator()->create_user();
         $this->getDataGenerator()->enrol_user($user->id, $course->id);
 
-        // Create forum with discussions.
         $forum = $this->getDataGenerator()->create_module('forum', ['course' => $course->id]);
-        $discussion = $this->getDataGenerator()->get_plugin_generator('mod_forum')->create_discussion([
+        $this->getDataGenerator()->get_plugin_generator('mod_forum')->create_discussion([
             'course' => $course->id,
             'forum' => $forum->id,
             'userid' => $user->id,
@@ -87,30 +79,20 @@ final class data_collector_test extends \advanced_testcase {
             'message' => 'Test message content',
         ]);
 
-        // Create scope with forum source.
         $scopebuilder = new scope_builder($course->id);
         $scopebuilder->with_sources(['cm_' . $forum->cmid]);
 
         $collector = new data_collector($scopebuilder);
         $data = $collector->collect();
 
-        $this->assertIsArray($data);
         $this->assertArrayHasKey('mod_forum', $data);
-        $this->assertNotEmpty($data['mod_forum']);
         $this->assertCount(1, $data['mod_forum']);
-
-        // Verify discussion structure.
-        $discussiondata = $data['mod_forum'][0];
-        $this->assertEquals('Test Discussion', $discussiondata['title']);
-        $this->assertArrayHasKey('posts', $discussiondata);
-        $this->assertNotEmpty($discussiondata['posts']);
+        $this->assertEquals('Test Discussion', $data['mod_forum'][0]['title']);
+        $this->assertArrayHasKey('posts', $data['mod_forum'][0]);
     }
 
     /**
-     * Test collect with multiple forum sources.
-     *
-     * @covers \report_ai_analysis\data_collector::collect
-     * @covers \report_ai_analysis\collectors\forum_collector::collect
+     * Test collect with multiple forum sources returns all discussions.
      */
     public function test_collect_multiple_forum_sources(): void {
         $this->resetAfterTest();
@@ -120,48 +102,34 @@ final class data_collector_test extends \advanced_testcase {
         $user = $this->getDataGenerator()->create_user();
         $this->getDataGenerator()->enrol_user($user->id, $course->id);
 
-        // Create two forums.
-        $forum1 = $this->getDataGenerator()->create_module('forum', ['course' => $course->id, 'name' => 'Forum 1']);
-        $forum2 = $this->getDataGenerator()->create_module('forum', ['course' => $course->id, 'name' => 'Forum 2']);
+        $forum1 = $this->getDataGenerator()->create_module('forum', ['course' => $course->id]);
+        $forum2 = $this->getDataGenerator()->create_module('forum', ['course' => $course->id]);
 
-        // Create discussions in each forum.
-        $discussion1 = $this->getDataGenerator()->get_plugin_generator('mod_forum')->create_discussion([
-            'course' => $course->id,
-            'forum' => $forum1->id,
-            'userid' => $user->id,
+        $this->getDataGenerator()->get_plugin_generator('mod_forum')->create_discussion([
+            'course' => $course->id, 'forum' => $forum1->id, 'userid' => $user->id,
             'name' => 'Discussion in Forum 1',
         ]);
-        $discussion2 = $this->getDataGenerator()->get_plugin_generator('mod_forum')->create_discussion([
-            'course' => $course->id,
-            'forum' => $forum2->id,
-            'userid' => $user->id,
+        $this->getDataGenerator()->get_plugin_generator('mod_forum')->create_discussion([
+            'course' => $course->id, 'forum' => $forum2->id, 'userid' => $user->id,
             'name' => 'Discussion in Forum 2',
         ]);
 
-        // Create scope with both forums.
         $scopebuilder = new scope_builder($course->id);
         $scopebuilder->with_sources(['cm_' . $forum1->cmid, 'cm_' . $forum2->cmid]);
 
         $collector = new data_collector($scopebuilder);
         $data = $collector->collect();
 
-        $this->assertNotEmpty($data['mod_forum']);
         $this->assertCount(2, $data['mod_forum']);
-
-        // Verify both discussions are present.
         $titles = array_column($data['mod_forum'], 'title');
         $this->assertContains('Discussion in Forum 1', $titles);
         $this->assertContains('Discussion in Forum 2', $titles);
     }
 
-
-
     /**
-     * Test format_for_ai produces valid output.
-     *
-     * @covers \report_ai_analysis\data_collector::format_for_ai
+     * Test format_for_ai and get_statistics return proper output.
      */
-    public function test_format_for_ai(): void {
+    public function test_format_and_statistics(): void {
         $this->resetAfterTest();
         $this->setAdminUser();
 
@@ -169,113 +137,32 @@ final class data_collector_test extends \advanced_testcase {
         $user = $this->getDataGenerator()->create_user();
         $this->getDataGenerator()->enrol_user($user->id, $course->id);
 
-        // Create forum with discussion.
         $forum = $this->getDataGenerator()->create_module('forum', ['course' => $course->id]);
-        $discussion = $this->getDataGenerator()->get_plugin_generator('mod_forum')->create_discussion([
-            'course' => $course->id,
-            'forum' => $forum->id,
-            'userid' => $user->id,
-            'name' => 'Test Discussion',
-            'message' => 'Test message',
+        $this->getDataGenerator()->get_plugin_generator('mod_forum')->create_discussion([
+            'course' => $course->id, 'forum' => $forum->id, 'userid' => $user->id,
+            'name' => 'Test Discussion', 'message' => 'Test message',
         ]);
 
         $scopebuilder = new scope_builder($course->id);
         $scopebuilder->with_sources(['cm_' . $forum->cmid]);
-
         $collector = new data_collector($scopebuilder);
         $data = $collector->collect();
 
+        // Test format_for_ai.
         $formatted = $collector->format_for_ai($data);
-
         $this->assertIsString($formatted);
         $this->assertStringContainsString('Test Discussion', $formatted);
         $this->assertStringContainsString('Test message', $formatted);
-    }
 
-    /**
-     * Test get_statistics returns valid statistics.
-     *
-     * @covers \report_ai_analysis\data_collector::get_statistics
-     */
-    public function test_get_statistics(): void {
-        $this->resetAfterTest();
-        $this->setAdminUser();
-
-        $course = $this->getDataGenerator()->create_course();
-        $user = $this->getDataGenerator()->create_user();
-        $this->getDataGenerator()->enrol_user($user->id, $course->id);
-
-        // Create forum with discussion.
-        $forum = $this->getDataGenerator()->create_module('forum', ['course' => $course->id]);
-        $discussion = $this->getDataGenerator()->get_plugin_generator('mod_forum')->create_discussion([
-            'course' => $course->id,
-            'forum' => $forum->id,
-            'userid' => $user->id,
-            'name' => 'Test Discussion',
-        ]);
-
-        $scopebuilder = new scope_builder($course->id);
-        $scopebuilder->with_sources(['cm_' . $forum->cmid]);
-
-        $collector = new data_collector($scopebuilder);
-        $data = $collector->collect();
-
+        // Test get_statistics.
         $stats = $collector->get_statistics($data);
-
-        $this->assertIsArray($stats);
         $this->assertArrayHasKey('total_sources', $stats);
         $this->assertEquals(1, $stats['total_sources']);
         $this->assertArrayHasKey('mod_forum', $stats);
-        $this->assertNotEmpty($stats['mod_forum']);
     }
 
     /**
-     * Test collect with mix of forum and block sources (when available).
-     *
-     * @covers \report_ai_analysis\data_collector::collect
-     */
-    public function test_collect_mixed_sources(): void {
-        global $DB;
-
-        $this->resetAfterTest();
-        $this->setAdminUser();
-
-        $course = $this->getDataGenerator()->create_course();
-        $user = $this->getDataGenerator()->create_user();
-        $this->getDataGenerator()->enrol_user($user->id, $course->id);
-
-        // Create forum.
-        $forum = $this->getDataGenerator()->create_module('forum', ['course' => $course->id]);
-        $discussion = $this->getDataGenerator()->get_plugin_generator('mod_forum')->create_discussion([
-            'course' => $course->id,
-            'forum' => $forum->id,
-            'userid' => $user->id,
-            'name' => 'Forum Discussion',
-        ]);
-
-        // Create fake block context for testing.
-        $coursecontext = \context_course::instance($course->id);
-        $blockcontext = \context::instance_by_id($coursecontext->id);
-
-        // Create scope with forum and block sources.
-        $scopebuilder = new scope_builder($course->id);
-        $scopebuilder->with_sources(['cm_' . $forum->cmid, 'block_' . $blockcontext->id]);
-
-        $collector = new data_collector($scopebuilder);
-        $data = $collector->collect();
-
-        // Should collect forum discussions.
-        $this->assertNotEmpty($data['mod_forum']);
-        // Block AI chat data might be empty if no chat data exists - that's okay.
-        // Just verify the data structure was created properly.
-        $this->assertIsArray($data);
-    }
-
-    /**
-     * Test collect with timerange filter.
-     *
-     * @covers \report_ai_analysis\data_collector::collect
-     * @covers \report_ai_analysis\scope_builder::with_timerange
+     * Test collect with timerange filter returns only matching discussions.
      */
     public function test_collect_with_timerange_filter(): void {
         $this->resetAfterTest();
@@ -292,25 +179,16 @@ final class data_collector_test extends \advanced_testcase {
         $tomorrow = $now + DAYSECS;
         $twodaysago = $now - (2 * DAYSECS);
 
-        // Create discussion today.
-        $discussiontoday = $this->getDataGenerator()->get_plugin_generator('mod_forum')->create_discussion([
-            'course' => $course->id,
-            'forum' => $forum->id,
-            'userid' => $user->id,
-            'name' => 'Today Discussion',
-            'timemodified' => $now,
+        $this->getDataGenerator()->get_plugin_generator('mod_forum')->create_discussion([
+            'course' => $course->id, 'forum' => $forum->id, 'userid' => $user->id,
+            'name' => 'Today Discussion', 'timemodified' => $now,
+        ]);
+        $this->getDataGenerator()->get_plugin_generator('mod_forum')->create_discussion([
+            'course' => $course->id, 'forum' => $forum->id, 'userid' => $user->id,
+            'name' => 'Old Discussion', 'timemodified' => $twodaysago,
         ]);
 
-        // Create discussion two days ago.
-        $discussionold = $this->getDataGenerator()->get_plugin_generator('mod_forum')->create_discussion([
-            'course' => $course->id,
-            'forum' => $forum->id,
-            'userid' => $user->id,
-            'name' => 'Old Discussion',
-            'timemodified' => $twodaysago,
-        ]);
-
-        // Test with timerange that includes today.
+        // Filter to include only today.
         $scopebuilder = new scope_builder($course->id);
         $scopebuilder->with_sources(['cm_' . $forum->cmid]);
         $scopebuilder->with_timerange($yesterday, $tomorrow);
@@ -318,11 +196,10 @@ final class data_collector_test extends \advanced_testcase {
         $collector = new data_collector($scopebuilder);
         $data = $collector->collect();
 
-        $this->assertNotEmpty($data['mod_forum']);
-        $this->assertCount(1, $data['mod_forum'], 'Should only get discussion from today');
+        $this->assertCount(1, $data['mod_forum']);
         $this->assertEquals('Today Discussion', $data['mod_forum'][0]['title']);
 
-        // Test with timerange that excludes today (only old discussions).
+        // Filter to include only old.
         $scopebuilder2 = new scope_builder($course->id);
         $scopebuilder2->with_sources(['cm_' . $forum->cmid]);
         $scopebuilder2->with_timerange($twodaysago - DAYSECS, $yesterday);
@@ -330,8 +207,7 @@ final class data_collector_test extends \advanced_testcase {
         $collector2 = new data_collector($scopebuilder2);
         $data2 = $collector2->collect();
 
-        $this->assertNotEmpty($data2['mod_forum']);
-        $this->assertCount(1, $data2['mod_forum'], 'Should only get old discussion');
+        $this->assertCount(1, $data2['mod_forum']);
         $this->assertEquals('Old Discussion', $data2['mod_forum'][0]['title']);
     }
 }

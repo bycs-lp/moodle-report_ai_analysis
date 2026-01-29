@@ -17,9 +17,6 @@
 /**
  * Unit tests for provider_factory with DI.
  *
- * Tests the provider_factory class focusing on discovery mechanism
- * and caching behavior.
- *
  * @package    report_ai_analysis
  * @copyright  2025 ISB Bayern
  * @author     Dr. Peter Mayer
@@ -31,14 +28,11 @@
 namespace report_ai_analysis\unit;
 
 use cache;
-use PHPUnit\Framework\MockObject\MockObject;
 use report_ai_analysis\provider\provider_factory;
 use report_ai_analysis\scope_builder;
 
 /**
  * Unit test class for provider_factory.
- *
- * Tests the provider_factory discovery, caching, and instance management.
  *
  * @package    report_ai_analysis
  * @copyright  2025 ISB Bayern
@@ -56,15 +50,14 @@ final class provider_factory_unit_test extends \advanced_testcase {
     }
 
     /**
-     * Test that provider_factory discovers available providers.
+     * Test discovery finds valid providers and excludes base classes.
      *
      * @covers \report_ai_analysis\provider\provider_factory::discover_providers
      */
-    public function test_discover_providers_finds_available_providers(): void {
+    public function test_discover_providers_finds_valid_providers(): void {
         $factory = new provider_factory();
         $providers = $factory->discover_providers();
 
-        // Should return an array.
         $this->assertIsArray($providers);
 
         // All discovered classes should be subclasses of base_provider.
@@ -74,129 +67,77 @@ final class provider_factory_unit_test extends \advanced_testcase {
                 "Class {$classname} should be subclass of base_provider"
             );
         }
+
+        // Should not contain base_provider or factory itself.
+        $this->assertNotContains(\report_ai_analysis\provider\base_provider::class, $providers);
+        $this->assertNotContains(provider_factory::class, $providers);
     }
 
     /**
-     * Test that provider_factory uses cache for subsequent calls.
+     * Test MUC caching behavior - cache hit returns cached value, cache miss triggers discovery.
      *
      * @covers \report_ai_analysis\provider\provider_factory::discover_providers
      */
-    public function test_discover_providers_uses_request_cache(): void {
-        $factory = new provider_factory();
-
-        // First call.
-        $providers1 = $factory->discover_providers();
-
-        // Second call should use request-level cache.
-        $providers2 = $factory->discover_providers();
-
-        // Results should be identical.
-        $this->assertEquals($providers1, $providers2);
-    }
-
-    /**
-     * Test that provider_factory caches to MUC.
-     *
-     * @covers \report_ai_analysis\provider\provider_factory::discover_providers
-     */
-    public function test_discover_providers_caches_to_muc(): void {
-        // Create mock cache.
-        $mockcache = $this->createMock(cache::class);
-
-        // Cache should be checked first.
-        $mockcache->expects($this->once())
-            ->method('get')
-            ->with('provider_classes')
-            ->willReturn(false);
-
-        // Cache should be set after discovery.
-        $mockcache->expects($this->once())
-            ->method('set')
-            ->with('provider_classes', $this->isType('array'));
-
-        $factory = new provider_factory($mockcache);
-        $factory->discover_providers();
-    }
-
-    /**
-     * Test that provider_factory returns cached MUC value.
-     *
-     * @covers \report_ai_analysis\provider\provider_factory::discover_providers
-     */
-    public function test_discover_providers_returns_cached_muc_value(): void {
+    public function test_discover_providers_muc_caching(): void {
         $cachedproviders = ['\\TestProvider1', '\\TestProvider2'];
 
-        // Create mock cache that returns cached value.
+        // Test cache hit - should return cached value without calling set.
         $mockcache = $this->createMock(cache::class);
         $mockcache->expects($this->once())
             ->method('get')
             ->with('provider_classes')
             ->willReturn($cachedproviders);
-
-        // Cache::set should NOT be called.
-        $mockcache->expects($this->never())
-            ->method('set');
+        $mockcache->expects($this->never())->method('set');
 
         $factory = new provider_factory($mockcache);
         $providers = $factory->discover_providers();
-
         $this->assertEquals($cachedproviders, $providers);
+
+        // Test cache miss - should call set after discovery.
+        $mockcache2 = $this->createMock(cache::class);
+        $mockcache2->expects($this->once())
+            ->method('get')
+            ->with('provider_classes')
+            ->willReturn(false);
+        $mockcache2->expects($this->once())
+            ->method('set')
+            ->with('provider_classes', $this->isType('array'));
+
+        $factory2 = new provider_factory($mockcache2);
+        $factory2->discover_providers();
     }
 
     /**
-     * Test get_all_providers returns provider instances.
+     * Test get_all_providers returns valid base_provider instances and reuses them.
      *
      * @covers \report_ai_analysis\provider\provider_factory::get_all_providers
      */
-    public function test_get_all_providers_returns_instances(): void {
+    public function test_get_all_providers_returns_and_reuses_instances(): void {
         $course = $this->getDataGenerator()->create_course();
         $scopebuilder = new scope_builder($course->id);
 
         $factory = new provider_factory();
-        $providers = $factory->get_all_providers($scopebuilder);
-
-        $this->assertIsArray($providers);
-
-        // All should be base_provider instances.
-        foreach ($providers as $provider) {
-            $this->assertInstanceOf(
-                \report_ai_analysis\provider\base_provider::class,
-                $provider
-            );
-        }
-    }
-
-    /**
-     * Test get_all_providers reuses instances for same scope.
-     *
-     * @covers \report_ai_analysis\provider\provider_factory::get_all_providers
-     */
-    public function test_get_all_providers_reuses_instances(): void {
-        $course = $this->getDataGenerator()->create_course();
-        $scopebuilder = new scope_builder($course->id);
-
-        $factory = new provider_factory();
-
-        // First call.
         $providers1 = $factory->get_all_providers($scopebuilder);
 
-        // Second call with same scope.
+        $this->assertIsArray($providers1);
+        foreach ($providers1 as $provider) {
+            $this->assertInstanceOf(\report_ai_analysis\provider\base_provider::class, $provider);
+        }
+
+        // Second call should return same instances.
         $providers2 = $factory->get_all_providers($scopebuilder);
-
-        // Instances should be identical (same object references).
         $this->assertEquals(count($providers1), count($providers2));
-
         for ($i = 0; $i < count($providers1); $i++) {
             $this->assertSame($providers1[$i], $providers2[$i]);
         }
     }
 
     /**
-     * Test get_provider_for_source returns null for unknown source.
+     * Test get_provider_for_source returns null for unknown sources.
      *
      * @covers \report_ai_analysis\provider\provider_factory::get_provider_for_source
      */
-    public function test_get_provider_for_source_returns_null_for_unknown(): void {
+    public function test_get_provider_for_source_unknown_returns_null(): void {
         $course = $this->getDataGenerator()->create_course();
         $scopebuilder = new scope_builder($course->id);
 
@@ -207,77 +148,32 @@ final class provider_factory_unit_test extends \advanced_testcase {
     }
 
     /**
-     * Test clear_cache purges MUC and resets internal caches.
+     * Test cache clearing and reset functionality.
      *
      * @covers \report_ai_analysis\provider\provider_factory::clear_cache
+     * @covers \report_ai_analysis\provider\provider_factory::reset_caches
      */
-    public function test_clear_cache_purges_all_caches(): void {
-        // Create mock cache.
+    public function test_cache_management(): void {
+        $course = $this->getDataGenerator()->create_course();
+        $scopebuilder = new scope_builder($course->id);
+
+        // Test clear_cache purges MUC.
         $mockcache = $this->createMock(cache::class);
-        $mockcache->expects($this->once())
-            ->method('purge');
+        $mockcache->expects($this->once())->method('purge');
+        $mockcache->method('get')->willReturn(false);
+        $mockcache->method('set');
 
         $factory = new provider_factory($mockcache);
         $factory->clear_cache();
 
-        // After clear, next discover should re-scan.
-        // This is implicitly tested by the purge expectation.
-    }
+        // Test reset_caches allows continued operation.
+        $factory2 = new provider_factory();
+        $factory2->discover_providers();
+        $factory2->get_all_providers($scopebuilder);
+        $factory2->reset_caches();
 
-    /**
-     * Test reset_caches clears internal caches only.
-     *
-     * @covers \report_ai_analysis\provider\provider_factory::reset_caches
-     */
-    public function test_reset_caches_clears_internal_only(): void {
-        $course = $this->getDataGenerator()->create_course();
-        $scopebuilder = new scope_builder($course->id);
-
-        $factory = new provider_factory();
-
-        // Populate caches.
-        $factory->discover_providers();
-        $factory->get_all_providers($scopebuilder);
-
-        // Reset.
-        $factory->reset_caches();
-
-        // After reset, next call should work (no errors).
-        $providers = $factory->discover_providers();
+        // Should work after reset.
+        $providers = $factory2->discover_providers();
         $this->assertIsArray($providers);
-    }
-
-    /**
-     * Test constructor uses default cache when none provided.
-     *
-     * @covers \report_ai_analysis\provider\provider_factory::__construct
-     */
-    public function test_constructor_creates_default_cache(): void {
-        $factory = new provider_factory();
-
-        // Should not throw exceptions.
-        $this->assertInstanceOf(provider_factory::class, $factory);
-    }
-
-    /**
-     * Test that provider_factory does not include base_provider or itself.
-     *
-     * @covers \report_ai_analysis\provider\provider_factory::discover_providers
-     */
-    public function test_discover_providers_excludes_base_and_factory(): void {
-        $factory = new provider_factory();
-        $providers = $factory->discover_providers();
-
-        // Should not contain base_provider.
-        $this->assertNotContains(
-            \report_ai_analysis\provider\base_provider::class,
-            $providers
-        );
-
-        // Should not contain provider_factory itself.
-        $this->assertNotContains(
-            provider_factory::class,
-            $providers
-        );
     }
 }
