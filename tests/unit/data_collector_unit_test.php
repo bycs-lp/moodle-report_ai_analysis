@@ -27,11 +27,18 @@
 
 namespace report_ai_analysis\unit;
 
+defined('MOODLE_INTERNAL') || die();
+
+global $CFG;
+require_once($CFG->dirroot . '/report/ai_analysis/tests/fixtures/testable_providers.php');
+
 use PHPUnit\Framework\MockObject\MockObject;
 use report_ai_analysis\data_collector;
-use report_ai_analysis\provider\base_provider;
 use report_ai_analysis\provider\provider_factory;
 use report_ai_analysis\scope_builder;
+use report_ai_analysis\tests\fixtures\testable_provider;
+use report_ai_analysis\tests\fixtures\non_handling_provider;
+use report_ai_analysis\tests\fixtures\succeeding_provider;
 
 /**
  * Unit test class for data_collector with DI.
@@ -84,7 +91,7 @@ final class data_collector_unit_test extends \advanced_testcase {
     public function test_collect_throws_when_all_providers_empty(): void {
         $this->mockscopebuilder->method('get_sources_in_scope')->willReturn([]);
 
-        $mockprovider = $this->getMockBuilder(TestableProvider::class)
+        $mockprovider = $this->getMockBuilder(testable_provider::class)
             ->disableOriginalConstructor()
             ->onlyMethods(['collect'])
             ->getMock();
@@ -107,7 +114,7 @@ final class data_collector_unit_test extends \advanced_testcase {
         $this->mockscopebuilder->method('get_sources_in_scope')->willReturn([]);
 
         $testdata = [['id' => 1, 'content' => 'Test content']];
-        $mockprovider = $this->getMockBuilder(TestableProvider::class)
+        $mockprovider = $this->getMockBuilder(testable_provider::class)
             ->disableOriginalConstructor()
             ->onlyMethods(['collect'])
             ->getMock();
@@ -131,7 +138,7 @@ final class data_collector_unit_test extends \advanced_testcase {
         $this->mockscopebuilder->method('get_sources_in_scope')->willReturn(['cm_123']);
 
         // Provider that handles the source.
-        $handlingprovider = $this->getMockBuilder(TestableProvider::class)
+        $handlingprovider = $this->getMockBuilder(testable_provider::class)
             ->disableOriginalConstructor()
             ->onlyMethods(['collect', 'handles_source'])
             ->getMock();
@@ -139,7 +146,7 @@ final class data_collector_unit_test extends \advanced_testcase {
         $handlingprovider->method('collect')->willReturn([['data' => 'handled']]);
 
         // Provider that doesn't handle the source - collect should NOT be called.
-        $nonhandlingprovider = $this->getMockBuilder(NonHandlingProvider::class)
+        $nonhandlingprovider = $this->getMockBuilder(non_handling_provider::class)
             ->disableOriginalConstructor()
             ->onlyMethods(['collect', 'handles_source'])
             ->getMock();
@@ -164,14 +171,14 @@ final class data_collector_unit_test extends \advanced_testcase {
         $this->mockscopebuilder->method('get_sources_in_scope')->willReturn([]);
 
         // Provider that throws.
-        $throwingprovider = $this->getMockBuilder(TestableProvider::class)
+        $throwingprovider = $this->getMockBuilder(testable_provider::class)
             ->disableOriginalConstructor()
             ->onlyMethods(['collect'])
             ->getMock();
         $throwingprovider->method('collect')->willThrowException(new \Exception('Provider failed'));
 
         // Provider that succeeds.
-        $succeedingprovider = $this->getMockBuilder(SucceedingProvider::class)
+        $succeedingprovider = $this->getMockBuilder(succeeding_provider::class)
             ->disableOriginalConstructor()
             ->onlyMethods(['collect'])
             ->getMock();
@@ -203,95 +210,5 @@ final class data_collector_unit_test extends \advanced_testcase {
         $this->assertIsArray($stats);
         $this->assertArrayHasKey('total_sources', $stats);
         $this->assertEquals(0, $stats['total_sources']);
-    }
-}
-
-/**
- * Testable provider class for unit testing.
- */
-class TestableProvider extends base_provider {
-    /**
-     * Get provider type.
-     * @return string
-     */
-    public static function get_type(): string {
-        return 'test_provider';
-    }
-
-    /**
-     * Check if available.
-     * @return bool
-     */
-    public static function is_available(): bool {
-        return true;
-    }
-
-    /**
-     * Get metadata.
-     * @return array
-     */
-    public static function get_metadata(): array {
-        return ['name' => 'Test Provider', 'type' => 'test_provider'];
-    }
-
-    /**
-     * Collect data.
-     * @return array
-     */
-    public function collect(): array {
-        return [];
-    }
-
-    /**
-     * Format for AI.
-     * @param array $data
-     * @return string
-     */
-    public static function format_for_ai(array $data): string {
-        return 'Test formatted';
-    }
-
-    /**
-     * Get statistics.
-     * @param array $data
-     * @return array
-     */
-    public static function get_statistics(array $data): array {
-        return ['count' => count($data)];
-    }
-
-    /**
-     * Check if this provider handles the given source.
-     * @param string $sourceidentifier
-     * @return bool
-     */
-    public function handles_source(string $sourceidentifier): bool {
-        return true;
-    }
-}
-
-/**
- * Non-handling provider for testing source filtering.
- */
-class NonHandlingProvider extends TestableProvider {
-    /**
-     * Get provider type.
-     * @return string
-     */
-    public static function get_type(): string {
-        return 'non_handling_provider';
-    }
-}
-
-/**
- * Succeeding provider for testing exception handling.
- */
-class SucceedingProvider extends TestableProvider {
-    /**
-     * Get provider type.
-     * @return string
-     */
-    public static function get_type(): string {
-        return 'succeeding_provider';
     }
 }
