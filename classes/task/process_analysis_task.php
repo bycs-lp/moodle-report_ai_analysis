@@ -25,9 +25,11 @@
 
 namespace report_ai_analysis\task;
 
+use core\di;
 use core\task\adhoc_task;
 use report_ai_analysis\scope_builder;
 use report_ai_analysis\data_collector;
+use report_ai_analysis\local\ai_request_provider;
 
 /**
  * Process AI analysis report task.
@@ -113,7 +115,7 @@ class process_analysis_task extends adhoc_task {
                 $scopebuilder->filter_by_participants($scope->filters->participants, $roleids);
             } else if (isset($scope->filters->students)) {
                 // Legacy support for old "students" field.
-                $scopebuilder->with_students($scope->filters->students);
+                $scopebuilder->filter_by_participants($scope->filters->students);
             }
 
             if (isset($scope->filters->groups)) {
@@ -139,13 +141,20 @@ class process_analysis_task extends adhoc_task {
             $collecteddata = $collector->collect();
 
             // Check if any data was collected.
-            $hasdata = (!empty($collecteddata['conversations']) || !empty($collecteddata['discussions']));
+            // Data is keyed by provider type (e.g., 'mod_forum', 'block_ai_chat').
+            $hasdata = false;
+            foreach ($collecteddata as $providerdata) {
+                if (!empty($providerdata)) {
+                    $hasdata = true;
+                    break;
+                }
+            }
             if (!$hasdata) {
                 throw new \moodle_exception('error_no_data', 'report_ai_analysis');
             }
 
             // Format data for AI.
-            $conversationdata = data_collector::format_for_ai($collecteddata);
+            $conversationdata = $collector->format_for_ai($collecteddata);
 
             // Store raw data if enabled.
             $storerawdata = get_config('report_ai_analysis', 'store_raw_data');
@@ -167,30 +176,27 @@ class process_analysis_task extends adhoc_task {
             // Prepare AI request.
             $fullprompt = $systemprompt . "\n\n" . $report->prompt . "\n\n" . $conversationdata;
 
-            // Call AI Manager using the simple manager API.
+            // Call AI Manager using the DI-injectable provider.
             $starttime = microtime(true);
-            try {
-                $manager = new \local_ai_manager\manager(self::AI_PURPOSE);
-            } catch (\Exception $purposeexception) {
-                throw new \moodle_exception(
-                    'error_purposenotconfigured',
-                    'report_ai_analysis',
-                    '',
-                    null,
-                    $purposeexception->getMessage()
-                );
-            }
-            $result = $manager->perform_request($fullprompt, 'report_ai_analysis', $context->id);
+            $airequestprovider = di::get(ai_request_provider::class);
+
+            $result = $airequestprovider->perform_request(self::AI_PURPOSE, $fullprompt, 'report_ai_analysis', $context->id);
             $duration = microtime(true) - $starttime;
 
             // Check for errors.
             if ($result->get_code() !== 200) {
+                // Log debug info for troubleshooting.
+                $debuginfo = method_exists($result, 'get_debuginfo') ? $result->get_debuginfo() : '';
+                mtrace("AI request failed with code {$result->get_code()}: {$result->get_errormessage()}");
+                if (!empty($debuginfo)) {
+                    mtrace("Debug info: " . $debuginfo);
+                }
                 throw new \moodle_exception(
                     'error_ai_request',
                     'report_ai_analysis',
                     '',
-                    null,
-                    $result->get_errormessage()
+                    $result->get_errormessage(),
+                    $debuginfo
                 );
             }
 

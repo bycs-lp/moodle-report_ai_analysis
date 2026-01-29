@@ -25,7 +25,9 @@
 
 namespace report_ai_analysis\provider;
 
+use core\di;
 use report_ai_analysis\scope_builder;
+use report_ai_analysis\local\ai_log_provider;
 
 /**
  * Provider for block_ai_chat conversation data.
@@ -131,9 +133,11 @@ class block_ai_chat_provider extends base_provider {
      * @return array Array of conversations
      */
     private function get_user_conversations(int $userid, int $contextid, \stdClass $user): array {
-        // Use ai_chat's method to get structured conversations.
+        // Use DI-injectable provider for testability.
+        $ailogprovider = di::get(ai_log_provider::class);
+
         try {
-            $conversations = \local_ai_manager\ai_manager_utils::get_log_entries(
+            $conversations = $ailogprovider->get_log_entries(
                 'block_ai_chat',
                 $contextid,
                 $userid,
@@ -178,13 +182,12 @@ class block_ai_chat_provider extends base_provider {
                 'timestamp' => $entry->timecreated,
             ];
 
-            // Add AI response.
-            $connectorfactory = \core\di::get(\local_ai_manager\local\connector_factory::class);
-            $chatpurpose = $connectorfactory->get_purpose_by_purpose_string('chat');
+            // Add AI response using DI-injectable provider.
+            $formattedcontent = $ailogprovider->format_purpose_output('chat', $entry->promptcompletion);
 
             $threads[$threadid]['messages'][] = [
                 'role' => 'assistant',
-                'content' => $chatpurpose->format_output($entry->promptcompletion),
+                'content' => $formattedcontent,
                 'timestamp' => $entry->timecreated,
             ];
         }

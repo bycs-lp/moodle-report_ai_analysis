@@ -173,20 +173,6 @@ class source_registry {
     }
 
     /**
-     * Get table name for source type.
-     *
-     * @param string $sourcetype Source type identifier
-     * @return string|null Table name or null if not configured
-     */
-    public static function get_table(string $sourcetype): ?string {
-        if (!self::is_supported($sourcetype)) {
-            return null;
-        }
-
-        return self::SUPPORTED_SOURCES[$sourcetype]['table'] ?? null;
-    }
-
-    /**
      * Get all allowed plugins across all source types.
      *
      * Useful for validation without knowing the source type.

@@ -16,8 +16,10 @@
 
 namespace report_ai_analysis;
 
+use core\di;
+
 /**
- * Tests for template_manager class.
+ * Integration tests for template_manager class.
  *
  * @package    report_ai_analysis
  * @copyright  2025 ISB Bayern
@@ -26,12 +28,23 @@ namespace report_ai_analysis;
  * @covers     \report_ai_analysis\template_manager
  */
 final class template_manager_test extends \advanced_testcase {
+    /** @var template_manager The template manager instance for testing. */
+    private template_manager $manager;
+
+    /**
+     * Set up the test environment.
+     */
+    protected function setUp(): void {
+        parent::setUp();
+        $this->resetAfterTest();
+        $this->manager = di::get(template_manager::class);
+    }
+
     /**
      * Test getting enabled templates.
      */
     public function test_get_enabled_templates(): void {
         global $DB;
-        $this->resetAfterTest();
 
         // Create test templates.
         $time = time();
@@ -64,7 +77,7 @@ final class template_manager_test extends \advanced_testcase {
         $template3->id = $DB->insert_record('report_ai_analysis_templates', $template3);
 
         // Get enabled templates.
-        $templates = template_manager::get_enabled_templates();
+        $templates = $this->manager->get_enabled_templates();
 
         // Should only return enabled templates.
         $this->assertCount(2, $templates);
@@ -80,7 +93,6 @@ final class template_manager_test extends \advanced_testcase {
      */
     public function test_get_all_templates(): void {
         global $DB;
-        $this->resetAfterTest();
 
         $time = time();
 
@@ -96,7 +108,7 @@ final class template_manager_test extends \advanced_testcase {
             $DB->insert_record('report_ai_analysis_templates', $template);
         }
 
-        $templates = template_manager::get_all_templates();
+        $templates = $this->manager->get_all_templates();
         $this->assertCount(3, $templates);
     }
 
@@ -105,7 +117,6 @@ final class template_manager_test extends \advanced_testcase {
      */
     public function test_get_template(): void {
         global $DB;
-        $this->resetAfterTest();
 
         $time = time();
 
@@ -118,7 +129,7 @@ final class template_manager_test extends \advanced_testcase {
         $template->timemodified = $time;
         $id = $DB->insert_record('report_ai_analysis_templates', $template);
 
-        $retrieved = template_manager::get_template($id);
+        $retrieved = $this->manager->get_template($id);
 
         $this->assertEquals('Test Template', $retrieved->title);
         $this->assertEquals('Test Prompt', $retrieved->prompt);
@@ -128,10 +139,8 @@ final class template_manager_test extends \advanced_testcase {
      * Test getting non-existent template throws exception.
      */
     public function test_get_template_not_found(): void {
-        $this->resetAfterTest();
-
         $this->expectException(\dml_exception::class);
-        template_manager::get_template(99999);
+        $this->manager->get_template(99999);
     }
 
     /**
@@ -139,14 +148,13 @@ final class template_manager_test extends \advanced_testcase {
      */
     public function test_save_template_new(): void {
         global $DB;
-        $this->resetAfterTest();
 
         $data = new \stdClass();
         $data->title = 'New Template';
         $data->prompt = 'New Prompt';
         $data->enabled = 1;
 
-        $id = template_manager::save_template($data);
+        $id = $this->manager->save_template($data);
 
         $this->assertGreaterThan(0, $id);
 
@@ -164,7 +172,6 @@ final class template_manager_test extends \advanced_testcase {
      */
     public function test_save_template_update(): void {
         global $DB;
-        $this->resetAfterTest();
 
         $time = time() - 100;
 
@@ -185,7 +192,7 @@ final class template_manager_test extends \advanced_testcase {
         $data->prompt = 'Updated Prompt';
         $data->enabled = 0;
 
-        $returnedid = template_manager::save_template($data);
+        $returnedid = $this->manager->save_template($data);
 
         $this->assertEquals($id, $returnedid);
 
@@ -202,14 +209,13 @@ final class template_manager_test extends \advanced_testcase {
      */
     public function test_save_template_sortorder(): void {
         global $DB;
-        $this->resetAfterTest();
 
         // Create first template.
         $data1 = new \stdClass();
         $data1->title = 'First';
         $data1->prompt = 'First prompt';
         $data1->enabled = 1;
-        $id1 = template_manager::save_template($data1);
+        $id1 = $this->manager->save_template($data1);
 
         $template1 = $DB->get_record('report_ai_analysis_templates', ['id' => $id1]);
         $this->assertEquals(0, $template1->sortorder);
@@ -219,7 +225,7 @@ final class template_manager_test extends \advanced_testcase {
         $data2->title = 'Second';
         $data2->prompt = 'Second prompt';
         $data2->enabled = 1;
-        $id2 = template_manager::save_template($data2);
+        $id2 = $this->manager->save_template($data2);
 
         $template2 = $DB->get_record('report_ai_analysis_templates', ['id' => $id2]);
         $this->assertEquals(1, $template2->sortorder);
@@ -229,7 +235,7 @@ final class template_manager_test extends \advanced_testcase {
         $data3->title = 'Third';
         $data3->prompt = 'Third prompt';
         $data3->enabled = 1;
-        $id3 = template_manager::save_template($data3);
+        $id3 = $this->manager->save_template($data3);
 
         $template3 = $DB->get_record('report_ai_analysis_templates', ['id' => $id3]);
         $this->assertEquals(2, $template3->sortorder);
@@ -240,7 +246,6 @@ final class template_manager_test extends \advanced_testcase {
      */
     public function test_delete_template(): void {
         global $DB;
-        $this->resetAfterTest();
 
         $time = time();
 
@@ -257,7 +262,7 @@ final class template_manager_test extends \advanced_testcase {
         }
 
         // Delete middle template.
-        $result = template_manager::delete_template($ids[1]);
+        $result = $this->manager->delete_template($ids[1]);
         $this->assertTrue($result);
 
         // Check it's deleted.
@@ -277,7 +282,6 @@ final class template_manager_test extends \advanced_testcase {
      */
     public function test_move_template_up(): void {
         global $DB;
-        $this->resetAfterTest();
 
         $time = time();
 
@@ -294,7 +298,7 @@ final class template_manager_test extends \advanced_testcase {
         }
 
         // Move template 2 up (from position 2 to position 1).
-        $result = template_manager::move_template($ids[2], 'up');
+        $result = $this->manager->move_template($ids[2], 'up');
         $this->assertTrue($result);
 
         // Check new positions.
@@ -312,7 +316,6 @@ final class template_manager_test extends \advanced_testcase {
      */
     public function test_move_template_down(): void {
         global $DB;
-        $this->resetAfterTest();
 
         $time = time();
 
@@ -329,7 +332,7 @@ final class template_manager_test extends \advanced_testcase {
         }
 
         // Move template 0 down (from position 0 to position 1).
-        $result = template_manager::move_template($ids[0], 'down');
+        $result = $this->manager->move_template($ids[0], 'down');
         $this->assertTrue($result);
 
         // Check new positions.
@@ -347,7 +350,6 @@ final class template_manager_test extends \advanced_testcase {
      */
     public function test_move_template_up_at_top(): void {
         global $DB;
-        $this->resetAfterTest();
 
         $time = time();
 
@@ -361,7 +363,7 @@ final class template_manager_test extends \advanced_testcase {
         $id = $DB->insert_record('report_ai_analysis_templates', $template);
 
         // Try to move up when already at top.
-        $result = template_manager::move_template($id, 'up');
+        $result = $this->manager->move_template($id, 'up');
         $this->assertFalse($result);
 
         // Check position unchanged.
@@ -374,7 +376,6 @@ final class template_manager_test extends \advanced_testcase {
      */
     public function test_move_template_down_at_bottom(): void {
         global $DB;
-        $this->resetAfterTest();
 
         $time = time();
 
@@ -391,7 +392,7 @@ final class template_manager_test extends \advanced_testcase {
         }
 
         // Try to move last template down.
-        $result = template_manager::move_template($ids[1], 'down');
+        $result = $this->manager->move_template($ids[1], 'down');
         $this->assertFalse($result);
 
         // Check position unchanged.
@@ -404,7 +405,6 @@ final class template_manager_test extends \advanced_testcase {
      */
     public function test_toggle_enabled(): void {
         global $DB;
-        $this->resetAfterTest();
 
         $time = time();
 
@@ -418,14 +418,14 @@ final class template_manager_test extends \advanced_testcase {
         $id = $DB->insert_record('report_ai_analysis_templates', $template);
 
         // Toggle to disabled.
-        $newstatus = template_manager::toggle_enabled($id);
+        $newstatus = $this->manager->toggle_enabled($id);
         $this->assertFalse($newstatus);
 
         $updated = $DB->get_record('report_ai_analysis_templates', ['id' => $id]);
         $this->assertEquals(0, $updated->enabled);
 
         // Toggle back to enabled.
-        $newstatus = template_manager::toggle_enabled($id);
+        $newstatus = $this->manager->toggle_enabled($id);
         $this->assertTrue($newstatus);
 
         $updated = $DB->get_record('report_ai_analysis_templates', ['id' => $id]);
@@ -436,9 +436,7 @@ final class template_manager_test extends \advanced_testcase {
      * Test empty database returns empty array.
      */
     public function test_get_enabled_templates_empty(): void {
-        $this->resetAfterTest();
-
-        $templates = template_manager::get_enabled_templates();
+        $templates = $this->manager->get_enabled_templates();
         $this->assertIsArray($templates);
         $this->assertEmpty($templates);
     }
@@ -448,7 +446,6 @@ final class template_manager_test extends \advanced_testcase {
      */
     public function test_get_enabled_templates_all_disabled(): void {
         global $DB;
-        $this->resetAfterTest();
 
         $time = time();
 
@@ -464,7 +461,7 @@ final class template_manager_test extends \advanced_testcase {
             $DB->insert_record('report_ai_analysis_templates', $template);
         }
 
-        $templates = template_manager::get_enabled_templates();
+        $templates = $this->manager->get_enabled_templates();
         $this->assertIsArray($templates);
         $this->assertEmpty($templates);
     }

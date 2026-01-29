@@ -165,34 +165,34 @@ final class scope_builder_test extends \advanced_testcase {
     }
 
     /**
-     * Test student filter validation.
+     * Test participant filter validation.
      */
-    public function test_with_students(): void {
+    public function test_filter_by_participants(): void {
         $this->resetAfterTest();
 
         $course = $this->getDataGenerator()->create_course();
         $builder = new scope_builder($course->id);
 
-        $builder->with_students([1, 2, 3]);
-        $students = $builder->get_students_in_scope();
+        $builder->filter_by_participants([1, 2, 3]);
+        $participants = $builder->get_participants_in_scope();
 
-        $this->assertEquals([1, 2, 3], $students);
+        $this->assertEquals([1, 2, 3], $participants);
     }
 
     /**
-     * Test student filter with string IDs (should be converted to int).
+     * Test participant filter with string IDs (should be converted to int).
      */
-    public function test_with_students_string_conversion(): void {
+    public function test_filter_by_participants_string_conversion(): void {
         $this->resetAfterTest();
 
         $course = $this->getDataGenerator()->create_course();
         $builder = new scope_builder($course->id);
 
-        $builder->with_students(['5', '10', '15']);
-        $students = $builder->get_students_in_scope();
+        $builder->filter_by_participants(['5', '10', '15']);
+        $participants = $builder->get_participants_in_scope();
 
-        $this->assertSame([5, 10, 15], $students);
-        $this->assertIsInt($students[0]);
+        $this->assertSame([5, 10, 15], $participants);
+        $this->assertIsInt($participants[0]);
     }
 
     /**
@@ -219,12 +219,12 @@ final class scope_builder_test extends \advanced_testcase {
 
         $builder = new scope_builder($course->id);
         $builder->with_groups([$group1->id]);
-        $students = $builder->get_students_in_scope();
+        $participants = $builder->get_participants_in_scope();
 
-        $this->assertCount(2, $students);
-        $this->assertContains($user1->id, $students);
-        $this->assertContains($user2->id, $students);
-        $this->assertNotContains($user3->id, $students);
+        $this->assertCount(2, $participants);
+        $this->assertContains($user1->id, $participants);
+        $this->assertContains($user2->id, $participants);
+        $this->assertNotContains($user3->id, $participants);
     }
 
     /**

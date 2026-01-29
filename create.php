@@ -126,7 +126,7 @@ if ($isedit && $report) {
         // Time range.
         if (isset($scope->filters->timerange)) {
             // For optional date_time_selector fields with timestamp values.
-            // We need to set both the timestamp AND enable the field.
+            // We need to set the full array including hour, minute, and enable the field.
             $calendartype = \core_calendar\type_factory::get_calendar_instance();
 
             if (!empty($scope->filters->timerange->start)) {
@@ -135,6 +135,8 @@ if ($isedit && $report) {
                     'day' => $startdate['mday'],
                     'month' => $startdate['mon'],
                     'year' => $startdate['year'],
+                    'hour' => $startdate['hours'],
+                    'minute' => $startdate['minutes'],
                     'enabled' => 1,
                 ];
             }
@@ -145,6 +147,8 @@ if ($isedit && $report) {
                     'day' => $enddate['mday'],
                     'month' => $enddate['mon'],
                     'year' => $enddate['year'],
+                    'hour' => $enddate['hours'],
+                    'minute' => $enddate['minutes'],
                     'enabled' => 1,
                 ];
             }
@@ -193,7 +197,7 @@ if ($mform->is_cancelled()) {
 
     // Legacy support for old "students" field.
     if (empty($data->all_students) && !empty($data->students)) {
-        $scopebuilder->with_students($data->students);
+        $scopebuilder->filter_by_participants($data->students);
     }
 
     if (!empty($data->groups)) {

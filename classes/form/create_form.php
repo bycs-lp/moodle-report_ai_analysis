@@ -25,12 +25,18 @@
 
 namespace report_ai_analysis\form;
 
+use core\di;
+use report_ai_analysis\template_manager;
+
 defined('MOODLE_INTERNAL') || die();
 
 require_once($CFG->libdir . '/formslib.php');
 
 /**
  * Form for creating new AI analysis reports.
+ *
+ * Refactored to receive template_manager via customdata for better testability
+ * and Dependency Injection support.
  *
  * @copyright  2025 ISB Bayern
  * @author     Dr. Peter Mayer
@@ -219,17 +225,6 @@ class create_form extends \moodleform {
     }
 
     /**
-     * Add student filter.
-     *
-     * @param \MoodleQuickForm $mform The form
-     * @param int $courseid The course ID
-     * @deprecated Use add_participant_filter() instead
-     */
-    private function add_student_filter(\MoodleQuickForm $mform, int $courseid) {
-        $this->add_participant_filter($mform, $courseid);
-    }
-
-    /**
      * Add group filter.
      *
      * @param \MoodleQuickForm $mform The form
@@ -249,13 +244,18 @@ class create_form extends \moodleform {
     /**
      * Add prompt templates section.
      *
-     * @param \MoodleQuickForm $mform The form
+     * Uses template_manager from customdata for DI support, or creates one via DI.
+     *
+     * @param \MoodleQuickForm $mform The form.
      */
     private function add_prompt_templates(\MoodleQuickForm $mform) {
         global $PAGE;
 
+        // Get template manager from customdata or create via DI.
+        $templatemanager = $this->_customdata['templatemanager'] ?? di::get(template_manager::class);
+
         // Load enabled templates from database.
-        $templates = \report_ai_analysis\template_manager::get_enabled_templates();
+        $templates = $templatemanager->get_enabled_templates();
 
         if (empty($templates)) {
             return;

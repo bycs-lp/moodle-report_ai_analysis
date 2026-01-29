@@ -185,7 +185,7 @@ final class data_collector_test extends \advanced_testcase {
         $collector = new data_collector($scopebuilder);
         $data = $collector->collect();
 
-        $formatted = data_collector::format_for_ai($data);
+        $formatted = $collector->format_for_ai($data);
 
         $this->assertIsString($formatted);
         $this->assertStringContainsString('Test Discussion', $formatted);
@@ -220,7 +220,7 @@ final class data_collector_test extends \advanced_testcase {
         $collector = new data_collector($scopebuilder);
         $data = $collector->collect();
 
-        $stats = data_collector::get_statistics($data);
+        $stats = $collector->get_statistics($data);
 
         $this->assertIsArray($stats);
         $this->assertArrayHasKey('total_sources', $stats);

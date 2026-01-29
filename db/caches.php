@@ -34,4 +34,20 @@ $definitions = [
         'staticacceleration' => true,
         'staticaccelerationsize' => 1,
     ],
+
+    // Request-level cache for parsed scope JSON objects.
+    // Avoids repeated JSON parsing of identical scope details within a single request.
+    'scope_parse' => [
+        'mode' => cache_store::MODE_REQUEST,
+        'simplekeys' => true,
+        'simpledata' => false,
+    ],
+
+    // Request-level cache for role names.
+    // Avoids repeated database queries for the same role IDs within a single request.
+    'role_names' => [
+        'mode' => cache_store::MODE_REQUEST,
+        'simplekeys' => true,
+        'simpledata' => true,
+    ],
 ];

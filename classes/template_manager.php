@@ -25,8 +25,13 @@
 
 namespace report_ai_analysis;
 
+use moodle_database;
+
 /**
  * Manager class for prompt templates.
+ *
+ * Refactored from static methods to instance methods for better testability
+ * and Dependency Injection (DI) support.
  *
  * @package    report_ai_analysis
  * @copyright  2025 ISB Bayern
@@ -34,15 +39,26 @@ namespace report_ai_analysis;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class template_manager {
+    /** @var moodle_database Database instance. */
+    private moodle_database $db;
+
+    /**
+     * Constructor.
+     *
+     * @param moodle_database|null $db Optional database instance for testing.
+     */
+    public function __construct(?moodle_database $db = null) {
+        global $DB;
+        $this->db = $db ?? $DB;
+    }
+
     /**
      * Get all enabled templates ordered by sortorder.
      *
-     * @return array Array of template objects
+     * @return array Array of template objects.
      */
-    public static function get_enabled_templates(): array {
-        global $DB;
-
-        return $DB->get_records(
+    public function get_enabled_templates(): array {
+        return $this->db->get_records(
             'report_ai_analysis_templates',
             ['enabled' => 1],
             'sortorder ASC'
@@ -52,25 +68,21 @@ class template_manager {
     /**
      * Get all templates (enabled and disabled).
      *
-     * @return array Array of template objects
+     * @return array Array of template objects.
      */
-    public static function get_all_templates(): array {
-        global $DB;
-
-        return $DB->get_records('report_ai_analysis_templates', null, 'sortorder ASC');
+    public function get_all_templates(): array {
+        return $this->db->get_records('report_ai_analysis_templates', null, 'sortorder ASC');
     }
 
     /**
      * Get a specific template by ID.
      *
-     * @param int $templateid Template ID
-     * @return \stdClass Template object
-     * @throws \dml_exception If template not found
+     * @param int $templateid Template ID.
+     * @return \stdClass Template object.
+     * @throws \dml_exception If template not found.
      */
-    public static function get_template(int $templateid): \stdClass {
-        global $DB;
-
-        return $DB->get_record(
+    public function get_template(int $templateid): \stdClass {
+        return $this->db->get_record(
             'report_ai_analysis_templates',
             ['id' => $templateid],
             '*',
@@ -81,18 +93,16 @@ class template_manager {
     /**
      * Delete a template.
      *
-     * @param int $templateid Template ID
-     * @return bool Success status
-     * @throws \dml_exception
+     * @param int $templateid Template ID.
+     * @return bool Success status.
+     * @throws \dml_exception On database error.
      */
-    public static function delete_template(int $templateid): bool {
-        global $DB;
-
-        $transaction = $DB->start_delegated_transaction();
+    public function delete_template(int $templateid): bool {
+        $transaction = $this->db->start_delegated_transaction();
 
         try {
             // Get sortorder of deleted template.
-            $template = $DB->get_record(
+            $template = $this->db->get_record(
                 'report_ai_analysis_templates',
                 ['id' => $templateid],
                 'sortorder',
@@ -100,10 +110,10 @@ class template_manager {
             );
 
             // Delete template.
-            $DB->delete_records('report_ai_analysis_templates', ['id' => $templateid]);
+            $this->db->delete_records('report_ai_analysis_templates', ['id' => $templateid]);
 
             // Reorder remaining templates.
-            $DB->execute(
+            $this->db->execute(
                 "UPDATE {report_ai_analysis_templates}
                     SET sortorder = sortorder - 1
                   WHERE sortorder > :sortorder",
@@ -121,15 +131,13 @@ class template_manager {
     /**
      * Move template up or down in sort order.
      *
-     * @param int $templateid Template ID
-     * @param string $direction 'up' or 'down'
-     * @return bool Success status
-     * @throws \dml_exception
+     * @param int $templateid Template ID.
+     * @param string $direction 'up' or 'down'.
+     * @return bool Success status.
+     * @throws \dml_exception On database error.
      */
-    public static function move_template(int $templateid, string $direction): bool {
-        global $DB;
-
-        $template = $DB->get_record(
+    public function move_template(int $templateid, string $direction): bool {
+        $template = $this->db->get_record(
             'report_ai_analysis_templates',
             ['id' => $templateid],
             '*',
@@ -141,7 +149,7 @@ class template_manager {
         if ($direction === 'up' && $template->sortorder > 0) {
             $neworder = $template->sortorder - 1;
         } else if ($direction === 'down') {
-            $maxorder = $DB->get_field_sql(
+            $maxorder = $this->db->get_field_sql(
                 "SELECT MAX(sortorder) FROM {report_ai_analysis_templates}"
             );
             if ($template->sortorder < $maxorder) {
@@ -153,18 +161,18 @@ class template_manager {
             return false;
         }
 
-        $transaction = $DB->start_delegated_transaction();
+        $transaction = $this->db->start_delegated_transaction();
 
         try {
             // Swap with neighbor.
-            $DB->execute(
+            $this->db->execute(
                 "UPDATE {report_ai_analysis_templates}
                     SET sortorder = :oldsort
                   WHERE sortorder = :newsort",
                 ['oldsort' => $template->sortorder, 'newsort' => $neworder]
             );
 
-            $DB->set_field(
+            $this->db->set_field(
                 'report_ai_analysis_templates',
                 'sortorder',
                 $neworder,
@@ -182,47 +190,43 @@ class template_manager {
     /**
      * Create or update a template.
      *
-     * @param \stdClass $data Template data
-     * @return int Template ID
-     * @throws \dml_exception
+     * @param \stdClass $data Template data.
+     * @return int Template ID.
+     * @throws \dml_exception On database error.
      */
-    public static function save_template(\stdClass $data): int {
-        global $DB;
-
+    public function save_template(\stdClass $data): int {
         $data->timemodified = time();
 
         if (!empty($data->id)) {
             // Update existing template.
-            $DB->update_record('report_ai_analysis_templates', $data);
+            $this->db->update_record('report_ai_analysis_templates', $data);
             return $data->id;
         } else {
             // Create new template.
             $data->timecreated = time();
 
             // Set sortorder to last position.
-            $maxorder = $DB->get_field_sql(
+            $maxorder = $this->db->get_field_sql(
                 "SELECT MAX(sortorder) FROM {report_ai_analysis_templates}"
             );
             $data->sortorder = $maxorder !== null ? $maxorder + 1 : 0;
 
-            return $DB->insert_record('report_ai_analysis_templates', $data);
+            return $this->db->insert_record('report_ai_analysis_templates', $data);
         }
     }
 
     /**
      * Toggle template enabled status.
      *
-     * @param int $templateid Template ID
-     * @return bool New enabled status
-     * @throws \dml_exception
+     * @param int $templateid Template ID.
+     * @return bool New enabled status.
+     * @throws \dml_exception On database error.
      */
-    public static function toggle_enabled(int $templateid): bool {
-        global $DB;
-
-        $template = self::get_template($templateid);
+    public function toggle_enabled(int $templateid): bool {
+        $template = $this->get_template($templateid);
         $newstatus = $template->enabled ? 0 : 1;
 
-        $DB->set_field(
+        $this->db->set_field(
             'report_ai_analysis_templates',
             'enabled',
             $newstatus,

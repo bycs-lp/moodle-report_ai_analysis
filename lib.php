@@ -18,8 +18,7 @@
  * Library functions for report_ai_analysis.
  *
  * @package    report_ai_analysis
- * @copyright  2025 ISB Bayern
- * @author     Dr. Peter Mayer
+ * @copyright  2025 PeMaSoft, Dr. Peter Mayer
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
@@ -42,72 +41,4 @@ function report_ai_analysis_extend_navigation_course($navigation, $course, $cont
             new pix_icon('i/report', '')
         );
     }
-}
-
-/**
- * Get all enabled templates.
- *
- * @return array Array of template objects
- */
-function report_ai_analysis_get_enabled_templates(): array {
-    global $DB;
-    return $DB->get_records('report_ai_analysis_templates', ['enabled' => 1], 'sortorder ASC');
-}
-
-/**
- * Get a specific template by ID.
- *
- * @param int $templateid Template ID
- * @return stdClass Template object
- * @throws dml_exception If template not found
- */
-function report_ai_analysis_get_template(int $templateid): stdClass {
-    global $DB;
-    return $DB->get_record('report_ai_analysis_templates', ['id' => $templateid], '*', MUST_EXIST);
-}
-
-/**
- * Delete a template and reorder remaining ones.
- *
- * @param int $templateid Template ID
- * @return bool Success status
- */
-function report_ai_analysis_delete_template(int $templateid): bool {
-    global $DB;
-    $transaction = $DB->start_delegated_transaction();
-
-    try {
-        $template = $DB->get_record('report_ai_analysis_templates', ['id' => $templateid], 'sortorder', MUST_EXIST);
-        $DB->delete_records('report_ai_analysis_templates', ['id' => $templateid]);
-        $DB->execute(
-            "UPDATE {report_ai_analysis_templates} SET sortorder = sortorder - 1 WHERE sortorder > :sortorder",
-            ['sortorder' => $template->sortorder]
-        );
-        $transaction->allow_commit();
-        return true;
-    } catch (Exception $e) {
-        $transaction->rollback($e);
-        return false;
-    }
-}
-
-/**
- * Save (create or update) a template.
- *
- * @param stdClass $data Template data
- * @return int Template ID
- */
-function report_ai_analysis_save_template(stdClass $data): int {
-    global $DB;
-    $data->timemodified = time();
-
-    if (!empty($data->id)) {
-        $DB->update_record('report_ai_analysis_templates', $data);
-        return $data->id;
-    }
-
-    $data->timecreated = time();
-    $maxorder = $DB->get_field_sql("SELECT MAX(sortorder) FROM {report_ai_analysis_templates}");
-    $data->sortorder = $maxorder !== null ? $maxorder + 1 : 0;
-    return $DB->insert_record('report_ai_analysis_templates', $data);
 }

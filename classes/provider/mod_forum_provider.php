@@ -25,8 +25,9 @@
 
 namespace report_ai_analysis\provider;
 
+use moodle_database;
+use report_ai_analysis\local\forum_vault_provider;
 use report_ai_analysis\scope_builder;
-use mod_forum\local\container as forum_container;
 
 /**
  * Provider for mod_forum discussion data.
@@ -35,15 +36,44 @@ use mod_forum\local\container as forum_container;
  * Each discussion is treated as a complete conversation unit with hierarchical
  * post structure for AI analysis.
  *
+ * Refactored to use Dependency Injection for forum_vault_provider and database
+ * access for better testability.
+ *
  * @copyright  2025 ISB Bayern
  * @author     Dr. Peter Mayer
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class mod_forum_provider extends base_provider {
+    /** @var forum_vault_provider Forum vault provider. */
+    private forum_vault_provider $forumvaultprovider;
+
+    /** @var moodle_database Database instance. */
+    private moodle_database $db;
+
+    /**
+     * Constructor.
+     *
+     * @param scope_builder $scopebuilder The scope builder.
+     * @param int $maxrecords Maximum records to collect.
+     * @param forum_vault_provider|null $forumvaultprovider Optional forum vault provider for testing.
+     * @param moodle_database|null $db Optional database instance for testing.
+     */
+    public function __construct(
+        scope_builder $scopebuilder,
+        int $maxrecords = 1000,
+        ?forum_vault_provider $forumvaultprovider = null,
+        ?moodle_database $db = null
+    ) {
+        global $DB;
+        parent::__construct($scopebuilder, $maxrecords);
+        $this->forumvaultprovider = $forumvaultprovider ?? new forum_vault_provider();
+        $this->db = $db ?? $DB;
+    }
+
     /**
      * Check if mod_forum is available.
      *
-     * @return bool True if mod_forum is installed and enabled
+     * @return bool True if mod_forum is installed and enabled.
      */
     public static function is_available(): bool {
         global $CFG;
@@ -64,7 +94,7 @@ class mod_forum_provider extends base_provider {
     /**
      * Get provider metadata.
      *
-     * @return array Metadata array
+     * @return array Metadata array.
      */
     public static function get_metadata(): array {
         return [
@@ -77,15 +107,15 @@ class mod_forum_provider extends base_provider {
     /**
      * Collect forum discussions based on scope.
      *
-     * @return array Array of structured discussions with posts
-     * @throws \moodle_exception If mod_forum is not available
+     * @return array Array of structured discussions with posts.
+     * @throws \moodle_exception If mod_forum is not available.
      */
     public function collect(): array {
         if (!self::is_available()) {
             throw new \moodle_exception('error_forum_not_available', 'report_ai_analysis');
         }
 
-        global $DB, $USER;
+        global $USER;
 
         $alldiscussions = [];
 
@@ -97,16 +127,15 @@ class mod_forum_provider extends base_provider {
         }
 
         // Get all forums in the course.
-        $forums = $DB->get_records('forum', ['course' => $courseid]);
+        $forums = $this->db->get_records('forum', ['course' => $courseid]);
 
         if (empty($forums)) {
             return [];
         }
 
-        // Get vault factory from forum container.
-        $vaultfactory = forum_container::get_vault_factory();
-        $discussionvault = $vaultfactory->get_discussions_in_forum_vault();
-        $postvault = $vaultfactory->get_post_vault();
+        // Get vault factory from forum vault provider (DI).
+        $discussionvault = $this->forumvaultprovider->get_discussions_vault();
+        $postvault = $this->forumvaultprovider->get_post_vault();
 
         // Pre-collect all discussions to batch load users.
         $discussionstoprocess = [];
@@ -167,7 +196,7 @@ class mod_forum_provider extends base_provider {
         }, $discussionstoprocess));
 
         $userfields = 'id, firstname, lastname, firstnamephonetic, lastnamephonetic, middlename, alternatename';
-        $starterusers = $DB->get_records_list('user', 'id', $starteruserids, '', $userfields);
+        $starterusers = $this->db->get_records_list('user', 'id', $starteruserids, '', $userfields);
 
         // Now process discussions with pre-loaded users.
         foreach ($discussionstoprocess as $item) {
@@ -191,9 +220,9 @@ class mod_forum_provider extends base_provider {
      *
      * Checks if at least one post has timecreated within the specified timerange.
      *
-     * @param array $posts Array of post entities
-     * @param object $timerange Object with 'start' and 'end' properties (Unix timestamps)
-     * @return bool True if at least one post is in timerange
+     * @param array $posts Array of post entities.
+     * @param object $timerange Object with 'start' and 'end' properties (Unix timestamps).
+     * @return bool True if at least one post is in timerange.
      */
     private function has_post_in_timerange(array $posts, object $timerange): bool {
         foreach ($posts as $post) {
@@ -208,18 +237,16 @@ class mod_forum_provider extends base_provider {
     /**
      * Structure a discussion with all its posts.
      *
-     * @param \mod_forum\local\entities\discussion $discussion Discussion entity
-     * @param array $posts Array of post entities
-     * @param \stdClass $forum Forum record
-     * @param int $courseid Course ID
-     * @param array $starterusers Pre-loaded user records indexed by user ID
-     * @return array Structured discussion data
+     * @param \mod_forum\local\entities\discussion $discussion Discussion entity.
+     * @param array $posts Array of post entities.
+     * @param \stdClass $forum Forum record.
+     * @param int $courseid Course ID.
+     * @param array $starterusers Pre-loaded user records indexed by user ID.
+     * @return array Structured discussion data.
      */
     private function structure_discussion($discussion, array $posts, $forum, int $courseid, array $starterusers): array {
-        global $DB;
-
         // Get course info.
-        $course = $DB->get_record('course', ['id' => $courseid], 'id, fullname, shortname');
+        $course = $this->db->get_record('course', ['id' => $courseid], 'id, fullname, shortname');
 
         // Get discussion starter info from pre-loaded users.
         $starterid = $discussion->get_user_id();
@@ -227,7 +254,7 @@ class mod_forum_provider extends base_provider {
 
         if (!$starter) {
             // Fallback if user not found in cache.
-            $starter = $DB->get_record(
+            $starter = $this->db->get_record(
                 'user',
                 ['id' => $starterid],
                 'id, firstname, lastname, firstnamephonetic, lastnamephonetic, middlename, alternatename'
@@ -257,12 +284,10 @@ class mod_forum_provider extends base_provider {
     /**
      * Build hierarchical post structure from forum post entities.
      *
-     * @param array $postentities Array of post entities
-     * @return array Hierarchical array of posts
+     * @param array $postentities Array of post entities.
+     * @return array Hierarchical array of posts.
      */
     private function build_post_hierarchy(array $postentities): array {
-        global $DB;
-
         $hierarchy = [];
         $indexed = [];
 
@@ -271,7 +296,7 @@ class mod_forum_provider extends base_provider {
             return $post->get_author_id();
         }, $postentities));
 
-        $users = $DB->get_records_list(
+        $users = $this->db->get_records_list(
             'user',
             'id',
             $userids,

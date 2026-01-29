@@ -26,6 +26,7 @@
 require_once(__DIR__ . '/../../config.php');
 require_once($CFG->libdir . '/adminlib.php');
 
+use core\di;
 use report_ai_analysis\template_manager;
 use report_ai_analysis\table\templates_table;
 
@@ -46,12 +47,15 @@ $PAGE->set_heading(get_string('manage_templates', 'report_ai_analysis'));
 
 $returnurl = new moodle_url('/report/ai_analysis/manage_templates.php');
 
+// Get template manager instance via DI.
+$templatemanager = di::get(template_manager::class);
+
 // Handle actions.
 if (!empty($action) && confirm_sesskey()) {
     switch ($action) {
         case 'delete':
             if ($templateid && $confirm) {
-                if (template_manager::delete_template($templateid)) {
+                if ($templatemanager->delete_template($templateid)) {
                     redirect(
                         $returnurl,
                         get_string('template_deleted', 'report_ai_analysis'),
@@ -68,7 +72,7 @@ if (!empty($action) && confirm_sesskey()) {
                 }
             } else if ($templateid) {
                 // Show confirmation page.
-                $template = template_manager::get_template($templateid);
+                $template = $templatemanager->get_template($templateid);
 
                 echo $OUTPUT->header();
                 echo $OUTPUT->heading(get_string('confirm_delete_template', 'report_ai_analysis'));
@@ -94,14 +98,14 @@ if (!empty($action) && confirm_sesskey()) {
         case 'move':
             $direction = required_param('direction', PARAM_ALPHA);
             if ($templateid && in_array($direction, ['up', 'down'])) {
-                template_manager::move_template($templateid, $direction);
+                $templatemanager->move_template($templateid, $direction);
             }
             redirect($returnurl);
             break;
 
         case 'toggle':
             if ($templateid) {
-                template_manager::toggle_enabled($templateid);
+                $templatemanager->toggle_enabled($templateid);
             }
             redirect($returnurl);
             break;

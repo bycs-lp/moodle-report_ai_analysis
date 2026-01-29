@@ -91,22 +91,11 @@ final class source_registry_test extends \advanced_testcase {
     }
 
     /**
-     * Test getting table names.
-     */
-    public function test_get_table(): void {
-        $this->assertEquals('block_instances', source_registry::get_table('block'));
-        $this->assertNull(source_registry::get_table('aiplacement')); // No table configured.
-        $this->assertNull(source_registry::get_table('mod_forum')); // Disabled.
-        $this->assertNull(source_registry::get_table('invalid')); // Not exists.
-    }
-
-    /**
      * Test unsupported source type.
      */
     public function test_unsupported_source(): void {
         $this->assertFalse(source_registry::is_supported('invalid_type'));
         $this->assertEmpty(source_registry::get_allowed_plugins('invalid_type'));
-        $this->assertNull(source_registry::get_table('invalid_type'));
     }
 
     /**

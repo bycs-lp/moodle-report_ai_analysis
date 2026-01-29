@@ -25,88 +25,106 @@
 
 namespace report_ai_analysis\provider;
 
+use cache;
+use core_component;
 use report_ai_analysis\scope_builder;
 
 /**
  * Factory for discovering and managing data source providers.
  *
- * This factory automatically discovers all available providers by scanning
- * the provider directory for files matching the pattern *_provider.php.
- * Results are cached using Moodle's cache system for performance.
+ * This factory automatically discovers all available providers using Moodle's
+ * core_component API. Results are cached using Moodle's cache system (MUC)
+ * for performance.
+ *
+ * Refactored from static methods to instance methods for better testability
+ * and Dependency Injection (DI) support.
  *
  * @copyright  2025 ISB Bayern
  * @author     Dr. Peter Mayer
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class provider_factory {
-    /** @var array Cached provider class names */
-    private static $providerclasses = null;
+    /** @var cache MUC cache instance for provider classes. */
+    private cache $cache;
 
-    /** @var base_provider[] Cached provider instances */
-    private static $providerinstances = [];
+    /** @var array|null Cached provider class names (request-level). */
+    private ?array $providerclasses = null;
+
+    /** @var base_provider[] Cached provider instances. */
+    private array $providerinstances = [];
+
+    /**
+     * Constructor.
+     *
+     * @param cache|null $cache Optional cache instance for testing.
+     */
+    public function __construct(?cache $cache = null) {
+        $this->cache = $cache ?? cache::make('report_ai_analysis', 'providers');
+    }
 
     /**
      * Discover all available provider classes.
      *
-     * Scans the provider directory for *_provider.php files and returns
-     * fully qualified class names of available providers.
-     * Results are cached in static variable and MUC.
+     * Uses Moodle's core_component API to find provider classes in the
+     * report_ai_analysis\provider namespace.
+     * Results are cached in MUC and request-level cache.
      *
-     * @return string[] Array of fully qualified provider class names
+     * @return string[] Array of fully qualified provider class names.
      */
-    public static function discover_providers(): array {
-        // Return from static cache if available.
-        if (self::$providerclasses !== null) {
-            return self::$providerclasses;
+    public function discover_providers(): array {
+        // Return from request-level cache if available.
+        if ($this->providerclasses !== null) {
+            return $this->providerclasses;
         }
 
         // Try to get from MUC cache.
-        $cache = \cache::make('report_ai_analysis', 'providers');
-        $cached = $cache->get('provider_classes');
+        $cached = $this->cache->get('provider_classes');
 
         if ($cached !== false && is_array($cached)) {
-            self::$providerclasses = $cached;
-            return self::$providerclasses;
+            $this->providerclasses = $cached;
+            return $this->providerclasses;
         }
 
-        // Discover providers by scanning directory.
-        $providers = self::scan_for_providers();
+        // Discover providers using core_component API.
+        $providers = $this->scan_for_providers();
 
         // Cache the result.
-        $cache->set('provider_classes', $providers);
-        self::$providerclasses = $providers;
+        $this->cache->set('provider_classes', $providers);
+        $this->providerclasses = $providers;
 
         return $providers;
     }
 
     /**
-     * Scan provider directory for provider classes.
+     * Scan for provider classes using Moodle's core_component API.
      *
-     * @return string[] Array of fully qualified class names
+     * Uses core_component::get_component_classes_in_namespace() instead of
+     * glob() for better integration with Moodle's autoloading system.
+     *
+     * @return string[] Array of fully qualified class names.
      */
-    private static function scan_for_providers(): array {
+    private function scan_for_providers(): array {
         $providers = [];
-        $providerdir = __DIR__;
 
-        // Scan for *_provider.php files.
-        $files = glob($providerdir . '/*_provider.php');
+        // Get all classes in the provider namespace using Moodle's API.
+        $classes = core_component::get_component_classes_in_namespace(
+            'report_ai_analysis',
+            'provider'
+        );
 
-        if ($files === false) {
-            debugging('Failed to scan provider directory', DEBUG_DEVELOPER);
-            return [];
-        }
-
-        foreach ($files as $file) {
-            $basename = basename($file, '.php');
-            $classname = "\\report_ai_analysis\\provider\\{$basename}";
-
-            // Verify class exists and is a valid provider.
-            if (!class_exists($classname)) {
+        foreach ($classes as $classname => $path) {
+            // Skip base_provider itself (it's abstract).
+            if ($classname === base_provider::class) {
                 continue;
             }
 
-            // Skip base_provider itself (it's abstract).
-            if ($classname === '\\report_ai_analysis\\provider\\base_provider') {
+            // Skip provider_factory itself.
+            if ($classname === self::class) {
+                continue;
+            }
+
+            // Verify class is a valid provider.
+            if (!class_exists($classname)) {
                 continue;
             }
 
@@ -134,27 +152,27 @@ class provider_factory {
     /**
      * Get provider instance for a specific source identifier.
      *
-     * @param string $sourceidentifier Source identifier (e.g., 'block_123', 'cm_456')
-     * @param scope_builder $scopebuilder Scope builder
-     * @param int $maxrecords Maximum records to collect
-     * @return base_provider|null Provider instance or null if not found
+     * @param string $sourceidentifier Source identifier (e.g., 'block_123', 'cm_456').
+     * @param scope_builder $scopebuilder Scope builder.
+     * @param int $maxrecords Maximum records to collect.
+     * @return base_provider|null Provider instance or null if not found.
      */
-    public static function get_provider_for_source(
+    public function get_provider_for_source(
         string $sourceidentifier,
         scope_builder $scopebuilder,
         int $maxrecords = 1000
     ): ?base_provider {
-        $providers = self::discover_providers();
+        $providers = $this->discover_providers();
 
         foreach ($providers as $classname) {
             $cachekey = $classname . '_' . spl_object_hash($scopebuilder);
 
             // Reuse instance if already created for this scope.
-            if (isset(self::$providerinstances[$cachekey])) {
-                $provider = self::$providerinstances[$cachekey];
+            if (isset($this->providerinstances[$cachekey])) {
+                $provider = $this->providerinstances[$cachekey];
             } else {
                 $provider = new $classname($scopebuilder, $maxrecords);
-                self::$providerinstances[$cachekey] = $provider;
+                $this->providerinstances[$cachekey] = $provider;
             }
 
             if ($provider->handles_source($sourceidentifier)) {
@@ -168,23 +186,23 @@ class provider_factory {
     /**
      * Get all available provider instances.
      *
-     * @param scope_builder $scopebuilder Scope builder
-     * @param int $maxrecords Maximum records to collect
-     * @return base_provider[] Array of provider instances
+     * @param scope_builder $scopebuilder Scope builder.
+     * @param int $maxrecords Maximum records to collect.
+     * @return base_provider[] Array of provider instances.
      */
-    public static function get_all_providers(scope_builder $scopebuilder, int $maxrecords = 1000): array {
+    public function get_all_providers(scope_builder $scopebuilder, int $maxrecords = 1000): array {
         $providers = [];
-        $classnames = self::discover_providers();
+        $classnames = $this->discover_providers();
 
         foreach ($classnames as $classname) {
             $cachekey = $classname . '_' . spl_object_hash($scopebuilder);
 
             // Reuse instance if already created for this scope.
-            if (isset(self::$providerinstances[$cachekey])) {
-                $providers[] = self::$providerinstances[$cachekey];
+            if (isset($this->providerinstances[$cachekey])) {
+                $providers[] = $this->providerinstances[$cachekey];
             } else {
                 $provider = new $classname($scopebuilder, $maxrecords);
-                self::$providerinstances[$cachekey] = $provider;
+                $this->providerinstances[$cachekey] = $provider;
                 $providers[] = $provider;
             }
         }
@@ -193,45 +211,24 @@ class provider_factory {
     }
 
     /**
-     * Get metadata for all available providers.
-     *
-     * @return array Array of metadata arrays keyed by provider class
-     */
-    public static function get_all_metadata(): array {
-        $metadata = [];
-        $providers = self::discover_providers();
-
-        foreach ($providers as $classname) {
-            try {
-                $metadata[$classname] = $classname::get_metadata();
-            } catch (\Exception $e) {
-                debugging("Failed to get metadata for {$classname}: " . $e->getMessage(), DEBUG_DEVELOPER);
-            }
-        }
-
-        return $metadata;
-    }
-
-    /**
      * Clear provider cache.
      *
      * Should be called after installing/uninstalling plugins or when
      * purging caches.
      */
-    public static function clear_cache(): void {
-        $cache = \cache::make('report_ai_analysis', 'providers');
-        $cache->purge();
-        self::$providerclasses = null;
-        self::$providerinstances = [];
+    public function clear_cache(): void {
+        $this->cache->purge();
+        $this->providerclasses = null;
+        $this->providerinstances = [];
     }
 
     /**
-     * Reset static caches (for testing).
+     * Reset instance caches (for testing).
      *
      * @return void
      */
-    public static function reset_caches(): void {
-        self::$providerclasses = null;
-        self::$providerinstances = [];
+    public function reset_caches(): void {
+        $this->providerclasses = null;
+        $this->providerinstances = [];
     }
 }

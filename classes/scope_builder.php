@@ -18,15 +18,20 @@
  * Scope builder for AI analysis reports.
  *
  * @package    report_ai_analysis
- * @copyright  2025 ISB Bayern
- * @author     Dr. Peter Mayer
+ * @copyright  2025 PeMaSoft, Dr. Peter Mayer
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 namespace report_ai_analysis;
 
+use cache;
+use moodle_database;
+
 /**
  * Builds scope definitions for AI analysis.
+ *
+ * Refactored to use MUC (Moodle Universal Cache) instead of static array caches
+ * for better testability and proper cache lifecycle management.
  */
 class scope_builder {
     /**
@@ -39,28 +44,28 @@ class scope_builder {
      */
     const ANALYSIS_MODE_AGGREGATED = 'aggregated';
 
-    /** @var int The course ID */
-    private $courseid;
+    /** @var int The course ID. */
+    private int $courseid;
 
-    /** @var array Filters for the scope */
-    private $filters = [];
+    /** @var array Filters for the scope. */
+    private array $filters = [];
 
-    /** @var object The scope object */
-    private $scope;
+    /** @var object The scope object. */
+    private object $scope;
 
-    /** @var array Static cache for parsed scope JSON (Request-level cache) */
-    private static $parsecache = [];
-
-    /** @var array Static cache for role names (Request-level cache) */
-    private static $rolenamecache = [];
+    /** @var moodle_database Database instance. */
+    private moodle_database $db;
 
     /**
      * Constructor.
      *
-     * @param int $courseid The course ID for analysis
+     * @param int $courseid The course ID for analysis.
+     * @param moodle_database|null $db Optional database instance for testing.
      */
-    public function __construct(int $courseid) {
+    public function __construct(int $courseid, ?moodle_database $db = null) {
+        global $DB;
         $this->courseid = $courseid;
+        $this->db = $db ?? $DB;
         $this->scope = new \stdClass();
         $this->scope->filters = new \stdClass();
     }
@@ -68,9 +73,9 @@ class scope_builder {
     /**
      * Set analysis mode.
      *
-     * @param string $mode Analysis mode (individual or aggregated)
+     * @param string $mode Analysis mode (individual or aggregated).
      * @return self
-     * @throws \coding_exception If invalid mode
+     * @throws \coding_exception If invalid mode.
      */
     public function set_analysis_mode(string $mode): self {
         if (!in_array($mode, [self::ANALYSIS_MODE_INDIVIDUAL, self::ANALYSIS_MODE_AGGREGATED], true)) {
@@ -89,9 +94,9 @@ class scope_builder {
      * - 'forum_789' → Forum (future)
      * - 'quiz_101' → Quiz (future)
      *
-     * @param array $sources Array of source identifiers
+     * @param array $sources Array of source identifiers.
      * @return self
-     * @throws \coding_exception If invalid source format
+     * @throws \coding_exception If invalid source format.
      */
     public function with_sources(array $sources): self {
         // Validate all sources before accepting.
@@ -104,23 +109,12 @@ class scope_builder {
     }
 
     /**
-     * Add student filter.
-     *
-     * @param array $userids Array of user IDs
-     * @return self
-     * @deprecated Use filter_by_participants() instead
-     */
-    public function with_students(array $userids): self {
-        return $this->filter_by_participants($userids);
-    }
-
-    /**
      * Filter by course participants with optional role restrictions.
      *
-     * @param array $participantids Array of user IDs
-     * @param array $roleids Optional array of role IDs to filter by
+     * @param array $participantids Array of user IDs.
+     * @param array $roleids Optional array of role IDs to filter by.
      * @return self
-     * @throws \coding_exception If participant IDs are empty
+     * @throws \coding_exception If participant IDs are empty.
      */
     public function filter_by_participants(array $participantids, array $roleids = []): self {
         if (empty($participantids)) {
@@ -139,7 +133,7 @@ class scope_builder {
     /**
      * Add group filter.
      *
-     * @param array $groupids Array of group IDs
+     * @param array $groupids Array of group IDs.
      * @return self
      */
     public function with_groups(array $groupids): self {
@@ -150,10 +144,10 @@ class scope_builder {
     /**
      * Add time range filter.
      *
-     * @param int $start Unix timestamp start
-     * @param int $end Unix timestamp end
+     * @param int $start Unix timestamp start.
+     * @param int $end Unix timestamp end.
      * @return self
-     * @throws \coding_exception If invalid time range
+     * @throws \coding_exception If invalid time range.
      */
     public function with_timerange(int $start, int $end): self {
         if ($start < 0 || $end < 0 || $start > $end) {
@@ -167,7 +161,7 @@ class scope_builder {
     /**
      * Get sources in scope.
      *
-     * @return array Array of source identifiers (e.g., ['mod_forum'])
+     * @return array Array of source identifiers (e.g., ['mod_forum']).
      */
     public function get_sources_in_scope(): array {
         return $this->scope->filters->sources ?? [];
@@ -176,7 +170,7 @@ class scope_builder {
     /**
      * Build the scope as JSON string.
      *
-     * @return string JSON-encoded scope definition
+     * @return string JSON-encoded scope definition.
      */
     public function build(): string {
         $this->scope->courseid = $this->courseid;
@@ -187,17 +181,20 @@ class scope_builder {
     /**
      * Parse scope JSON back to object.
      *
-     * Uses request-level caching to avoid repeated JSON parsing of identical scope details.
+     * Uses MUC (MODE_REQUEST) to avoid repeated JSON parsing of identical scope details.
      *
-     * @param string $json JSON-encoded scope
-     * @return object Scope object
-     * @throws \coding_exception If JSON is invalid
+     * @param string $json JSON-encoded scope.
+     * @return object Scope object.
+     * @throws \coding_exception If JSON is invalid.
      */
     public static function parse(string $json): object {
-        // Check if already cached.
+        // Use MUC request-level cache.
+        $cache = cache::make('report_ai_analysis', 'scope_parse');
         $cachekey = md5($json);
-        if (isset(self::$parsecache[$cachekey])) {
-            return clone self::$parsecache[$cachekey];
+
+        $cached = $cache->get($cachekey);
+        if ($cached !== false) {
+            return clone $cached;
         }
 
         $scope = json_decode($json);
@@ -207,7 +204,7 @@ class scope_builder {
         }
 
         // Cache the parsed result.
-        self::$parsecache[$cachekey] = $scope;
+        $cache->set($cachekey, $scope);
 
         return clone $scope;
     }
@@ -215,26 +212,31 @@ class scope_builder {
     /**
      * Get role names for display.
      *
-     * Uses request-level caching to avoid repeated database queries for the same role IDs.
+     * Uses MUC (MODE_REQUEST) to avoid repeated database queries for the same role IDs.
      *
-     * @param array $roleids Array of role IDs
-     * @return array Array of role names
+     * @param array $roleids Array of role IDs.
+     * @param moodle_database|null $db Optional database instance for testing.
+     * @return array Array of role names.
      */
-    public static function get_role_names(array $roleids): array {
+    public static function get_role_names(array $roleids, ?moodle_database $db = null): array {
         global $DB;
+        $database = $db ?? $DB;
 
         if (empty($roleids)) {
             return [];
         }
 
-        // Check if all role names are already cached.
+        // Use MUC request-level cache.
+        $cache = cache::make('report_ai_analysis', 'role_names');
         $cachekey = implode(',', $roleids);
-        if (isset(self::$rolenamecache[$cachekey])) {
-            return self::$rolenamecache[$cachekey];
+
+        $cached = $cache->get($cachekey);
+        if ($cached !== false) {
+            return $cached;
         }
 
-        [$insql, $params] = $DB->get_in_or_equal($roleids, SQL_PARAMS_NAMED);
-        $roles = $DB->get_records_select('role', "id $insql", $params, 'sortorder', 'id, shortname, name');
+        [$insql, $params] = $database->get_in_or_equal($roleids, SQL_PARAMS_NAMED);
+        $roles = $database->get_records_select('role', "id $insql", $params, 'sortorder', 'id, shortname, name');
 
         $names = [];
         foreach ($roles as $role) {
@@ -242,7 +244,7 @@ class scope_builder {
         }
 
         // Cache the result.
-        self::$rolenamecache[$cachekey] = $names;
+        $cache->set($cachekey, $names);
 
         return $names;
     }
@@ -250,7 +252,7 @@ class scope_builder {
     /**
      * Get allowed AI plugins for conversation data collection.
      *
-     * @return array Array of allowed plugin names
+     * @return array Array of allowed plugin names.
      */
     public static function get_allowed_ai_plugins(): array {
         return source_registry::get_all_allowed_plugins();
@@ -259,8 +261,8 @@ class scope_builder {
     /**
      * Validate if AI plugin is allowed.
      *
-     * @param string $pluginname The plugin name to validate
-     * @return bool True if plugin is allowed
+     * @param string $pluginname The plugin name to validate.
+     * @return bool True if plugin is allowed.
      */
     public static function is_allowed_ai_plugin(string $pluginname): bool {
         return source_registry::get_source_type_for_plugin($pluginname) !== null;
@@ -269,7 +271,7 @@ class scope_builder {
     /**
      * Get course ID in scope.
      *
-     * @return int Course ID
+     * @return int Course ID.
      */
     public function get_course_in_scope(): int {
         return $this->courseid;
@@ -278,18 +280,16 @@ class scope_builder {
     /**
      * Get course modules (activities) in scope.
      *
-     * @return array Array of course module IDs
+     * @return array Array of course module IDs.
      */
     public function get_activities_in_scope(): array {
-        global $DB;
-
         // Handle explicit source filter.
         if (isset($this->scope->filters->sources)) {
             return $this->extract_ids_by_prefix('cm_');
         }
 
         // Get all activities in course.
-        return $DB->get_fieldset_select('course_modules', 'id', 'course = :courseid', ['courseid' => $this->courseid]);
+        return $this->db->get_fieldset_select('course_modules', 'id', 'course = :courseid', ['courseid' => $this->courseid]);
     }
 
     /**
@@ -298,11 +298,9 @@ class scope_builder {
      * Returns context IDs, not block instance IDs, as these are used
      * for AI chat conversations linked to block contexts.
      *
-     * @return array Array of block context IDs
+     * @return array Array of block context IDs.
      */
     public function get_block_contexts_in_scope(): array {
-        global $DB;
-
         // Handle explicit source filter.
         if (isset($this->scope->filters->sources)) {
             return $this->extract_ids_by_prefix('block_');
@@ -323,17 +321,7 @@ class scope_builder {
             'blockname' => 'ai_chat',
         ];
 
-        return $DB->get_fieldset_sql($sql, $params);
-    }
-
-    /**
-     * Get students (users) in scope.
-     *
-     * @return array Array of user IDs
-     * @deprecated Use get_participants_in_scope() instead
-     */
-    public function get_students_in_scope(): array {
-        return $this->get_participants_in_scope();
+        return $this->db->get_fieldset_sql($sql, $params);
     }
 
     /**
@@ -341,11 +329,9 @@ class scope_builder {
      *
      * Considers participant filter, role filter, and group filter.
      *
-     * @return array Array of user IDs
+     * @return array Array of user IDs.
      */
     public function get_participants_in_scope(): array {
-        global $DB;
-
         // Handle explicit participant filter.
         if (isset($this->scope->filters->participants)) {
             return $this->scope->filters->participants;
@@ -355,7 +341,7 @@ class scope_builder {
         if (isset($this->scope->filters->groups)) {
             $userids = [];
             foreach ($this->scope->filters->groups as $groupid) {
-                $members = $DB->get_fieldset_select(
+                $members = $this->db->get_fieldset_select(
                     'groups_members',
                     'userid',
                     'groupid = :groupid',
@@ -394,7 +380,7 @@ class scope_builder {
     /**
      * Get timerange filter in scope.
      *
-     * @return object|null Object with 'start' and 'end' properties (Unix timestamps), or null if not set
+     * @return object|null Object with 'start' and 'end' properties (Unix timestamps), or null if not set.
      */
     public function get_timerange_in_scope(): ?object {
         return $this->scope->filters->timerange ?? null;
@@ -403,8 +389,8 @@ class scope_builder {
     /**
      * Validate source identifier format.
      *
-     * @param string $source Source identifier (e.g., 'cm_123', 'block_456')
-     * @throws \coding_exception If format is invalid
+     * @param string $source Source identifier (e.g., 'cm_123', 'block_456').
+     * @throws \coding_exception If format is invalid.
      */
     private function validate_source_format(string $source): void {
         // Format: 'prefix_id'.
@@ -429,8 +415,8 @@ class scope_builder {
     /**
      * Extract IDs from sources array by prefix.
      *
-     * @param string $prefix Prefix to match (e.g., 'cm_', 'block_')
-     * @return array Array of extracted IDs
+     * @param string $prefix Prefix to match (e.g., 'cm_', 'block_').
+     * @return array Array of extracted IDs.
      */
     private function extract_ids_by_prefix(string $prefix): array {
         if (!isset($this->scope->filters->sources)) {
