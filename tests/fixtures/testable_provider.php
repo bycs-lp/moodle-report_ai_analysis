@@ -25,8 +25,6 @@
 
 namespace report_ai_analysis\tests\fixtures;
 
-defined('MOODLE_INTERNAL') || die();
-
 use report_ai_analysis\provider\base_provider;
 
 /**

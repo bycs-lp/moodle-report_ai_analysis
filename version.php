@@ -26,7 +26,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'report_ai_analysis';
-$plugin->version = 2025013000;
+$plugin->version = 2026013000;
 $plugin->requires = 2023100900; // Moodle 4.3.
 $plugin->maturity = MATURITY_ALPHA;
 $plugin->release = 'v1.0.0';
