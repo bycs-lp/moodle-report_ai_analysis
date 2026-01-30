@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Test fixtures for provider unit tests.
+ * Testable provider class for unit testing.
  *
  * @package    report_ai_analysis
  * @copyright  2025 ISB Bayern
@@ -102,43 +102,5 @@ class testable_provider extends base_provider {
      */
     public function handles_source(string $sourceidentifier): bool {
         return true;
-    }
-}
-
-/**
- * Non-handling provider for testing source filtering.
- *
- * @package    report_ai_analysis
- * @copyright  2025 ISB Bayern
- * @author     Dr. Peter Mayer
- * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- */
-class non_handling_provider extends testable_provider {
-    /**
-     * Get provider type.
-     *
-     * @return string Provider type.
-     */
-    public static function get_type(): string {
-        return 'non_handling_provider';
-    }
-}
-
-/**
- * Succeeding provider for testing exception handling.
- *
- * @package    report_ai_analysis
- * @copyright  2025 ISB Bayern
- * @author     Dr. Peter Mayer
- * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- */
-class succeeding_provider extends testable_provider {
-    /**
-     * Get provider type.
-     *
-     * @return string Provider type.
-     */
-    public static function get_type(): string {
-        return 'succeeding_provider';
     }
 }

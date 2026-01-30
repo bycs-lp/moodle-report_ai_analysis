@@ -30,7 +30,9 @@ namespace report_ai_analysis\unit;
 defined('MOODLE_INTERNAL') || die();
 
 global $CFG;
-require_once($CFG->dirroot . '/report/ai_analysis/tests/fixtures/testable_providers.php');
+require_once($CFG->dirroot . '/report/ai_analysis/tests/fixtures/testable_provider.php');
+require_once($CFG->dirroot . '/report/ai_analysis/tests/fixtures/non_handling_provider.php');
+require_once($CFG->dirroot . '/report/ai_analysis/tests/fixtures/succeeding_provider.php');
 
 use PHPUnit\Framework\MockObject\MockObject;
 use report_ai_analysis\data_collector;
