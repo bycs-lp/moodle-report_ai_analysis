@@ -27,19 +27,19 @@ Feature: Permissions and Capabilities
     Then I should see "New analysis"
     And I should see "AI Conversation Analysis"
 
-  Scenario: Teacher (non-editing) can view and create
+  Scenario: Teacher (non-editing) has no access by default
     Given I am on the "Course 1" "Course" page logged in as "teacher2"
+    When I navigate to "Reports" in current page administration
+    Then I should not see "AI Conversation Analysis"
+
+  Scenario: Teacher (non-editing) can view with permission override
+    Given the following "permission overrides" exist:
+      | capability                | permission | role    | contextlevel | reference |
+      | report/ai_analysis:view   | Allow      | teacher | Course       | C1        |
+    And I am on the "Course 1" "Course" page logged in as "teacher2"
     When I navigate to "Reports > AI Conversation Analysis" in current page administration
     Then I should see "AI Conversation Analysis"
     And I should not see "New analysis"
-
-  Scenario: Teacher (non-editing) cannot delete by default
-    Given the following "report_ai_analysis > reports" exist:
-      | title        | course | user     | status    | prompt    |
-      | Test Report  | C1     | teacher2 | completed | Analysis  |
-    And I am on the "Course 1" "Course" page logged in as "teacher2"
-    When I navigate to "Reports > AI Conversation Analysis" in current page administration
-    Then I should not see "Delete" in the "Test Report" "table_row"
 
   Scenario: Student has no access to plugin
     Given I am on the "Course 1" "Course" page logged in as "student1"
