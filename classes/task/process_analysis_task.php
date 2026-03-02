@@ -223,9 +223,10 @@ class process_analysis_task extends adhoc_task {
                 $report->timemodified = time();
                 $DB->update_record('report_ai_analysis_reports', $report);
 
-                // Requeue task with delay.
+                // Requeue task with delay, preserving the original user context.
                 $newtask = new self();
                 $newtask->set_custom_data($data);
+                $newtask->set_userid($this->get_userid());
                 $newtask->set_next_run_time(time() + 60); // 1 minute delay.
                 \core\task\manager::queue_adhoc_task($newtask);
 

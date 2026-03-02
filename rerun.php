@@ -108,6 +108,7 @@ try {
     $task->set_custom_data([
         'reportid' => $report->id,
     ]);
+    $task->set_userid($USER->id);
     \core\task\manager::queue_adhoc_task($task);
 
     $transaction->allow_commit();

@@ -245,6 +245,7 @@ if ($mform->is_cancelled()) {
             // Queue adhoc task for processing.
             $task = new \report_ai_analysis\task\process_analysis_task();
             $task->set_custom_data(['reportid' => $reportid]);
+            $task->set_userid($USER->id);
             \core\task\manager::queue_adhoc_task($task);
 
             $message = get_string('reportupdatedandqueued', 'report_ai_analysis');
@@ -270,6 +271,7 @@ if ($mform->is_cancelled()) {
         // Queue adhoc task for processing.
         $task = new \report_ai_analysis\task\process_analysis_task();
         $task->set_custom_data(['reportid' => $reportid]);
+        $task->set_userid($USER->id);
         \core\task\manager::queue_adhoc_task($task);
 
         $message = get_string('analysisqueued', 'report_ai_analysis');
