@@ -37,12 +37,12 @@ class scope_builder {
     /**
      * Analysis mode: Individual analysis per participant.
      */
-    const ANALYSIS_MODE_INDIVIDUAL = 'individual';
+    public const ANALYSIS_MODE_INDIVIDUAL = 'individual';
 
     /**
      * Analysis mode: Aggregated analysis across all participants.
      */
-    const ANALYSIS_MODE_AGGREGATED = 'aggregated';
+    public const ANALYSIS_MODE_AGGREGATED = 'aggregated';
 
     /** @var int The course ID. */
     private int $courseid;
