@@ -29,6 +29,7 @@ use core\di;
 use core\task\adhoc_task;
 use report_ai_analysis\scope_builder;
 use report_ai_analysis\data_collector;
+use report_ai_analysis\error_info;
 use report_ai_analysis\local\ai_request_provider;
 
 /**
@@ -185,18 +186,27 @@ class process_analysis_task extends adhoc_task {
 
             // Check for errors.
             if ($result->get_code() !== 200) {
-                // Log debug info for troubleshooting.
                 $debuginfo = method_exists($result, 'get_debuginfo') ? $result->get_debuginfo() : '';
                 mtrace("AI request failed with code {$result->get_code()}: {$result->get_errormessage()}");
                 if (!empty($debuginfo)) {
                     mtrace("Debug info: " . $debuginfo);
                 }
+                $errorcode = $this->get_response_error_code($result->get_code(), $result->get_errormessage());
+                if (
+                    $errorcode === 'error_terms_not_accepted'
+                ) {
+                    throw new \moodle_exception('error_terms_not_accepted', 'report_ai_analysis');
+                }
+                $technicaldetails = $result->get_errormessage();
+                if (!empty($debuginfo)) {
+                    $technicaldetails .= "\n" . $debuginfo;
+                }
                 throw new \moodle_exception(
-                    'error_ai_request',
+                    $errorcode,
                     'report_ai_analysis',
                     '',
-                    $result->get_errormessage(),
-                    $debuginfo
+                    null,
+                    $technicaldetails
                 );
             }
 
@@ -212,7 +222,7 @@ class process_analysis_task extends adhoc_task {
             $DB->update_record('report_ai_analysis_reports', $report);
 
             mtrace("Report {$reportid} completed successfully.");
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             // Handle errors with retry logic.
             $maxretries = get_config('report_ai_analysis', 'retry_on_failure') ?: 0;
 
@@ -233,13 +243,15 @@ class process_analysis_task extends adhoc_task {
                 mtrace("Report {$reportid} failed, retry {$report->retry_count}/{$maxretries}.");
             } else {
                 // Mark as failed.
+                $errorcode = $this->get_error_code($e);
                 $report->status = 'failed';
-                $report->error_message = $e->getMessage();
-                $report->error_code = $this->get_error_code($e);
+                $report->error_message = error_info::get_description($errorcode);
+                $report->error_details = $this->get_exception_details($e, $report->error_message);
+                $report->error_code = $errorcode;
                 $report->timemodified = time();
                 $DB->update_record('report_ai_analysis_reports', $report);
 
-                mtrace("Report {$reportid} failed: " . $e->getMessage());
+                mtrace("Report {$reportid} failed with error code {$errorcode}: " . $e->getMessage());
             }
         }
     }
@@ -247,11 +259,18 @@ class process_analysis_task extends adhoc_task {
     /**
      * Check if error is retryable.
      *
-     * @param \Exception $e The exception
+     * @param \Throwable $e The throwable
      * @return bool True if retryable
      */
-    private function is_retryable_error(\Exception $e): bool {
-        $message = $e->getMessage();
+    private function is_retryable_error(\Throwable $e): bool {
+        if (
+            $e instanceof \moodle_exception &&
+            in_array($e->errorcode, ['error_api_timeout', 'error_api_connection_error', 'error_rate_limit'], true)
+        ) {
+            return true;
+        }
+
+        $message = $e->getMessage() . "\n" . $this->get_exception_details($e);
 
         // Retry on timeout, connection errors, rate limits.
         $retryable = [
@@ -273,11 +292,15 @@ class process_analysis_task extends adhoc_task {
     /**
      * Get error code from exception.
      *
-     * @param \Exception $e The exception
+     * @param \Throwable $e The throwable
      * @return string Error code
      */
-    private function get_error_code(\Exception $e): string {
-        $message = strtolower($e->getMessage());
+    private function get_error_code(\Throwable $e): string {
+        if ($e instanceof \moodle_exception && error_info::is_user_error_code($e->errorcode)) {
+            return $e->errorcode;
+        }
+
+        $message = strtolower($e->getMessage() . "\n" . $this->get_exception_details($e));
 
         if (stripos($message, 'timeout') !== false) {
             return 'error_api_timeout';
@@ -293,5 +316,53 @@ class process_analysis_task extends adhoc_task {
         }
 
         return 'error_unknown';
+    }
+
+    /**
+     * Classify an unsuccessful AI response without relying on translated messages.
+     *
+     * @param int $responsecode HTTP-like response code
+     * @param string $errormessage AI manager error message
+     * @return string Error code
+     */
+    private function get_response_error_code(int $responsecode, string $errormessage): string {
+        if (
+            $responsecode === 403 &&
+            $errormessage === get_string('error_http403notconfirmed', 'local_ai_manager')
+        ) {
+            return 'error_terms_not_accepted';
+        }
+        if ($responsecode === 408 || $responsecode === 504) {
+            return 'error_api_timeout';
+        }
+        if ($responsecode === 429) {
+            return 'error_rate_limit';
+        }
+        if ($responsecode === 502 || $responsecode === 503) {
+            return 'error_api_connection_error';
+        }
+
+        return 'error_ai_request';
+    }
+
+    /**
+     * Get technical details from an exception without exposing them to users.
+     *
+     * @param \Throwable $e The throwable
+     * @param string|null $description User-facing error description
+     * @return string|null
+     */
+    private function get_exception_details(\Throwable $e, ?string $description = null): ?string {
+        $details = [];
+        if ($e instanceof \moodle_exception && !empty($e->debuginfo)) {
+            $details[] = $e->debuginfo;
+        }
+
+        if ($e->getMessage() !== '' && $e->getMessage() !== $description) {
+            $details[] = $e->getMessage();
+        }
+
+        $details = array_unique($details);
+        return empty($details) ? null : implode("\n", $details);
     }
 }

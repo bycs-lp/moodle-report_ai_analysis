@@ -28,6 +28,7 @@ namespace report_ai_analysis\output;
 use renderable;
 use renderer_base;
 use templatable;
+use report_ai_analysis\error_info;
 use report_ai_analysis\scope_builder;
 
 /**
@@ -207,10 +208,20 @@ class view_page implements renderable, templatable {
         }
 
         // Error info (if failed).
-        $data->haserror = $this->report->status === 'failed' && !empty($this->report->error_message);
+        $data->haserror = $this->report->status === 'failed';
         if ($data->haserror) {
-            $data->errormessage = format_string($this->report->error_message);
+            $data->errormessage = error_info::get_description($this->report->error_code ?? null);
+            $data->errordetails = error_info::get_debug_details(
+                $this->report->error_code ?? null,
+                $this->report->error_message ?? null,
+                $this->report->error_details ?? null
+            );
+            $data->haserrordetails = $data->errordetails !== null;
             $data->errorcode = $this->report->error_code ?? '';
+            $data->canacceptaiterms = $this->report->error_code === 'error_terms_not_accepted';
+            if ($data->canacceptaiterms) {
+                $data->acceptaitermsurl = new \moodle_url('/local/ai_manager/confirm_ai_usage.php');
+            }
         }
 
         // Raw data (if user has permission).

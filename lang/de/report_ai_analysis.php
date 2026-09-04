@@ -25,6 +25,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
+$string['acceptaiterms'] = 'KI-Nutzungsbedingungen prüfen und akzeptieren';
 $string['activities'] = 'Aktivitäten';
 $string['add_template'] = 'Neue Vorlage hinzufügen';
 $string['ai_analysis:create'] = 'KI-Analyseberichte erstellen';
@@ -67,7 +68,7 @@ $string['enable'] = 'Aktivieren';
 $string['enable_markdown_conversion'] = 'Markdown-Rendering aktivieren';
 $string['enable_markdown_conversion_desc'] = 'Markdown in KI-Antworten in HTML konvertieren';
 $string['error_ai_chat_not_available'] = 'Block ai_chat ist nicht installiert oder nicht aktiviert';
-$string['error_ai_request'] = 'KI-Anfrage fehlgeschlagen: {$a}';
+$string['error_ai_request'] = 'Die KI-Anfrage ist fehlgeschlagen. Versuchen Sie es später erneut oder kontaktieren Sie die Administration.';
 $string['error_api_connection_error'] = 'Verbindung zum KI-Service konnte nicht hergestellt werden';
 $string['error_api_timeout'] = 'API-Anfrage hat das Zeitlimit überschritten';
 $string['error_contextmismatch'] = 'Bericht gehört nicht zum angegebenen Kurs-Kontext';
@@ -80,6 +81,7 @@ $string['error_prompt_too_short'] = 'Prompt muss mindestens 10 Zeichen lang sein
 $string['error_purposenotconfigured'] = 'Der KI-Zweck "singleprompt" ist nicht konfiguriert. Bitte kontaktieren Sie Ihren Administrator.';
 $string['error_rate_limit'] = 'Ratenlimit des KI-Services erreicht';
 $string['error_saving_template'] = 'Fehler beim Speichern der Vorlage';
+$string['error_terms_not_accepted'] = 'Sie haben die KI-Nutzungsbedingungen noch nicht akzeptiert. Akzeptieren Sie diese, bevor Sie den Bericht erneut ausführen.';
 $string['error_title_too_long'] = 'Titel darf maximal 255 Zeichen lang sein';
 $string['error_title_too_short'] = 'Titel muss mindestens 3 Zeichen lang sein';
 $string['error_unknown'] = 'Ein unbekannter Fehler ist aufgetreten';
@@ -121,6 +123,9 @@ $string['participants'] = 'Teilnehmer';
 $string['pluginname'] = 'KI-Konversationsanalyse';
 $string['privacy:metadata:report_ai_analysis_reports'] = 'Speichert von Nutzern erstellte KI-Analyseberichte';
 $string['privacy:metadata:report_ai_analysis_reports:ai_result'] = 'Das KI-generierte Analyseergebnis';
+$string['privacy:metadata:report_ai_analysis_reports:error_code'] = 'Der klassifizierte Fehlercode einer fehlgeschlagenen Analyse';
+$string['privacy:metadata:report_ai_analysis_reports:error_details'] = 'Die für eine fehlgeschlagene Analyse gespeicherten technischen Diagnoseinformationen';
+$string['privacy:metadata:report_ai_analysis_reports:error_message'] = 'Die nutzerfreundliche Beschreibung einer fehlgeschlagenen Analyse';
 $string['privacy:metadata:report_ai_analysis_reports:prompt'] = 'Der vom Nutzer bereitgestellte Analyse-Prompt';
 $string['privacy:metadata:report_ai_analysis_reports:raw_data'] = 'Die analysierten Rohdaten der Konversation';
 $string['privacy:metadata:report_ai_analysis_reports:timecreated'] = 'Der Zeitpunkt, zu dem der Bericht erstellt wurde';

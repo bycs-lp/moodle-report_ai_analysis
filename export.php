@@ -68,6 +68,17 @@ function export_json($report, $context) {
     $userfields = 'id, firstname, lastname, firstnamephonetic, lastnamephonetic, middlename, alternatename, email';
     $user = $DB->get_record('user', ['id' => $report->userid], $userfields);
 
+    $errormessage = null;
+    $errordetails = null;
+    if ($report->status === 'failed') {
+        $errormessage = \report_ai_analysis\error_info::get_description($report->error_code ?? null);
+        $errordetails = \report_ai_analysis\error_info::get_debug_details(
+            $report->error_code ?? null,
+            $report->error_message ?? null,
+            $report->error_details ?? null
+        );
+    }
+
     // Build export data.
     $exportdata = [
         'id' => $report->id,
@@ -77,7 +88,7 @@ function export_json($report, $context) {
         'prompt' => $report->prompt,
         'ai_result' => $report->ai_result,
         'status' => $report->status,
-        'error_message' => $report->error_message,
+        'error_message' => $errormessage,
         'ai_model' => $report->ai_model_name,
         'token_usage' => $report->token_usage,
         'retry_count' => $report->retry_count,
@@ -89,6 +100,9 @@ function export_json($report, $context) {
             'email' => $user->email,
         ],
     ];
+    if ($errordetails !== null) {
+        $exportdata['error_details'] = $errordetails;
+    }
 
     // Include raw data if user has permission.
     if (has_capability('report/ai_analysis:viewrawdata', $context) && !empty($report->raw_data)) {
@@ -216,9 +230,20 @@ function export_html($report, $context) {
         <div class="content">' . format_text($report->ai_result, FORMAT_MARKDOWN) . '</div>';
     }
 
-    if (!empty($report->error_message)) {
+    if ($report->status === 'failed') {
         $html .= '<h2>Error</h2>
-        <div class="content" style="color: #dc3545;">' . s($report->error_message) . '</div>';
+        <div class="content" style="color: #dc3545;">' .
+            s(\report_ai_analysis\error_info::get_description($report->error_code ?? null)) . '</div>';
+
+        $errordetails = \report_ai_analysis\error_info::get_debug_details(
+            $report->error_code ?? null,
+            $report->error_message ?? null,
+            $report->error_details ?? null
+        );
+        if ($errordetails !== null) {
+            $html .= '<h2>' . s(get_string('debuginfo', 'debug')) . '</h2>
+            <pre class="content">' . s($errordetails) . '</pre>';
+        }
     }
 
     $html .= '<div class="footer">

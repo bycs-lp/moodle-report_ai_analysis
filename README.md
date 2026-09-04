@@ -313,7 +313,8 @@ The plugin includes comprehensive Behat tests covering:
 | `prompt` | TEXT | Analysis prompt |
 | `ai_result` | LONGTEXT | AI response |
 | `status` | VARCHAR(20) | Status (pending/running/completed/failed/cancelled) |
-| `error_message` | TEXT | Error details |
+| `error_message` | TEXT | Localized user-facing error description |
+| `error_details` | TEXT | Technical details, displayed only when Moodle developer debugging and debug display are enabled |
 | `error_code` | VARCHAR(50) | Error code |
 | `ai_model` | VARCHAR(100) | AI model used |
 | `token_usage` | VARCHAR(100) | Token statistics |
@@ -345,7 +346,8 @@ Given the following "report_ai_analysis > reports" exist:
 - `status`: Report status (pending/running/completed/failed/cancelled)
 - `prompt`: Analysis prompt (string, required)
 - `ai_result`: AI analysis result (string, optional)
-- `error_message`: Error message for failed reports (string, optional)
+- `error_message`: User-facing error description for failed reports (string, optional)
+- `error_details`: Technical error details for debug-display tests (string, optional)
 - `error_code`: Error code (string, optional)
 - `ai_model`: AI model identifier (string, optional)
 - `token_usage`: Token statistics (string, optional)

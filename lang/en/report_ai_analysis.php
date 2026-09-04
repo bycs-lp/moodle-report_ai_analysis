@@ -25,6 +25,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
+$string['acceptaiterms'] = 'Review and accept AI terms of use';
 $string['activities'] = 'Activities';
 $string['add_template'] = 'Add new template';
 $string['ai_analysis:create'] = 'Create AI analysis reports';
@@ -68,7 +69,7 @@ $string['enable'] = 'Enable';
 $string['enable_markdown_conversion'] = 'Enable Markdown rendering';
 $string['enable_markdown_conversion_desc'] = 'Convert Markdown in AI responses to HTML';
 $string['error_ai_chat_not_available'] = 'Block ai_chat is not installed or not enabled';
-$string['error_ai_request'] = 'AI request failed: {$a}';
+$string['error_ai_request'] = 'The AI request failed. Please try again later or contact an administrator.';
 $string['error_api_connection_error'] = 'Could not connect to AI service';
 $string['error_api_timeout'] = 'API request timed out';
 $string['error_contextmismatch'] = 'Report does not belong to the specified course context';
@@ -81,6 +82,7 @@ $string['error_prompt_too_short'] = 'Prompt must be at least 10 characters long'
 $string['error_purposenotconfigured'] = 'The AI purpose "singleprompt" is not configured. Please contact your administrator.';
 $string['error_rate_limit'] = 'AI service rate limit reached';
 $string['error_saving_template'] = 'Error saving template';
+$string['error_terms_not_accepted'] = 'You have not yet accepted the AI terms of use. Accept them before re-running the report.';
 $string['error_title_too_long'] = 'Title must not exceed 255 characters';
 $string['error_title_too_short'] = 'Title must be at least 3 characters long';
 $string['error_unknown'] = 'Unknown error occurred';
@@ -122,6 +124,9 @@ $string['participants'] = 'Participants';
 $string['pluginname'] = 'AI Conversation Analysis';
 $string['privacy:metadata:report_ai_analysis_reports'] = 'Stores AI analysis reports created by users';
 $string['privacy:metadata:report_ai_analysis_reports:ai_result'] = 'The AI-generated analysis result';
+$string['privacy:metadata:report_ai_analysis_reports:error_code'] = 'The classified error code for a failed analysis';
+$string['privacy:metadata:report_ai_analysis_reports:error_details'] = 'Technical diagnostic details recorded for a failed analysis';
+$string['privacy:metadata:report_ai_analysis_reports:error_message'] = 'The user-facing description of a failed analysis';
 $string['privacy:metadata:report_ai_analysis_reports:prompt'] = 'The analysis prompt provided by the user';
 $string['privacy:metadata:report_ai_analysis_reports:raw_data'] = 'The raw conversation data analyzed';
 $string['privacy:metadata:report_ai_analysis_reports:timecreated'] = 'The time when the report was created';

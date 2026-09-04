@@ -49,6 +49,7 @@ Feature: Create AI Analysis Reports
     And I press "Create new analysis"
     Then I should see "Analysis has been queued for background processing"
     And I should see "Pending"
+    And an adhoc task "report_ai_analysis\task\process_analysis_task" should exist for user "teacher1"
 
   Scenario: Create a report with title and prompt
     Given I am on the "Course 1" "Course" page logged in as "teacher1"

@@ -30,6 +30,16 @@ echo format_text($content, FORMAT_HTML, ['context' => $context]);
 require_capability('report/ai_analysis:view', $context);
 ```
 
+#### Error and Exception Output (MANDATORY)
+- Never use `$e->getMessage()`, `debuginfo`, stack traces, connector responses, or stored technical errors as a user-facing error description.
+- Keep localized user-facing descriptions separate from technical details. Use an allow-listed language string for the description and dedicated non-user-facing storage for diagnostics.
+- Technical details may be rendered only through `report_ai_analysis\error_info`, only when both `$CFG->debugdeveloper` and `$CFG->debugdisplay` are enabled, and never when `NO_DEBUG_DISPLAY` is active.
+- Apply this rule to every output channel, including tables, detail pages, notifications, JSON/HTML exports, web services, and privacy exports. Privacy exports must never expose technical error details.
+- Administrative task and cron output may include the original error message and debug information to support diagnosis. These channels must remain restricted to administrators.
+- Use Moodle's `debugging($message, DEBUG_DEVELOPER)` for development diagnostics where appropriate; it already follows `debugdisplay` and `NO_DEBUG_DISPLAY`. Never replace it with direct output.
+- Treat legacy database values as untrusted technical details; escaping is required but does not replace the Moodle debug-display check.
+- Tests must prove that details are hidden when either Moodle debug setting is disabled and shown only when both are enabled.
+
 ### 📊 Database Operations (Core API Only)
 ```php
 // Use ONLY Moodle DB API - NEVER raw SQL without parameters
@@ -67,6 +77,8 @@ try {
   - ✅ **Require**: Named parameters (`:placeholder`)
 - ❌ **Reject**: CSRF vulnerabilities (forms without sesskey)
   - ✅ **Require**: `confirm_sesskey()` in form processing
+- ❌ **Reject**: Direct output of exception messages, debug information, stack traces, or connector errors
+  - ✅ **Require**: Localized descriptions plus `report_ai_analysis\error_info` for conditional developer details
 
 #### 2. Moodle Standards Compliance
 - ❌ **Reject**: Incomplete PHPDoc blocks (missing @package, @copyright, @license)

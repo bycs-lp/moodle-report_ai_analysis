@@ -35,14 +35,14 @@ $confirm = optional_param('confirm', 0, PARAM_INT);
 require_sesskey();
 
 // Load report.
-global $DB;
+global $DB, $USER;
 $report = $DB->get_record('report_ai_analysis_reports', ['id' => $id], '*', MUST_EXIST);
 
 // Get context.
 $context = context::instance_by_id($report->contextid);
 
 // Check permissions.
-require_capability('report/ai_analysis:create', $context);
+require_capability('report/ai_analysis:rerun', $context);
 
 // Set up page.
 $PAGE->set_url('/report/ai_analysis/rerun.php', ['id' => $id]);
@@ -90,11 +90,22 @@ if (!$confirm) {
 
 // Re-run the report by resetting status and scheduling task.
 $transaction = $DB->start_delegated_transaction();
+$indexparams = [];
+if ($context->contextlevel === CONTEXT_COURSE) {
+    $indexparams['id'] = $context->instanceid;
+} else if ($context->contextlevel === CONTEXT_MODULE) {
+    $indexparams['cmid'] = $context->instanceid;
+} else if ($context->contextlevel === CONTEXT_COURSECAT) {
+    $indexparams['categoryid'] = $context->instanceid;
+}
+$indexurl = new moodle_url('/report/ai_analysis/index.php', $indexparams);
 
 try {
     // Reset report status.
     $report->status = 'pending';
     $report->error_message = null;
+    $report->error_details = null;
+    $report->error_code = null;
     $report->ai_result = null;
     $report->raw_data = null;
     $report->timecompleted = null;
@@ -113,24 +124,23 @@ try {
 
     $transaction->allow_commit();
 
-    // Build redirect URL to index page based on context.
-    $indexparams = [];
-    if ($context->contextlevel === CONTEXT_COURSE) {
-        $indexparams['id'] = $context->instanceid;
-    } else if ($context->contextlevel === CONTEXT_MODULE) {
-        $indexparams['cmid'] = $context->instanceid;
-    } else if ($context->contextlevel === CONTEXT_COURSECAT) {
-        $indexparams['categoryid'] = $context->instanceid;
-    }
-
     // Redirect to index page with success message.
     redirect(
-        new moodle_url('/report/ai_analysis/index.php', $indexparams),
+        $indexurl,
         get_string('reportrerunsuccess', 'report_ai_analysis'),
         null,
         \core\output\notification::NOTIFY_SUCCESS
     );
-} catch (Exception $e) {
-    $transaction->rollback($e);
-    throw new moodle_exception('errorrerunningreport', 'report_ai_analysis', '', null, $e->getMessage());
+} catch (\Throwable $e) {
+    try {
+        $transaction->rollback($e);
+    } catch (\Throwable $rollbackexception) {
+        debugging('Error re-running AI analysis report: ' . $rollbackexception->getMessage(), DEBUG_DEVELOPER);
+    }
+    redirect(
+        $indexurl,
+        get_string('errorrerunningreport', 'report_ai_analysis'),
+        null,
+        \core\output\notification::NOTIFY_ERROR
+    );
 }

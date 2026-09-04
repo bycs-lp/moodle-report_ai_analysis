@@ -28,6 +28,7 @@ namespace report_ai_analysis\table;
 use table_sql;
 use moodle_url;
 use html_writer;
+use report_ai_analysis\error_info;
 use report_ai_analysis\scope_builder;
 
 defined('MOODLE_INTERNAL') || die();
@@ -98,7 +99,8 @@ class reports_table extends table_sql {
 
         // Join with user table to avoid N+1 queries.
         $userfields = \core_user\fields::for_name()->get_sql('u', false, '', '', false)->selects;
-        $fields = 'r.id, r.title, r.contextid, r.scope_details, r.timecreated, r.userid, r.status, ' . $userfields;
+        $fields = 'r.id, r.title, r.contextid, r.scope_details, r.timecreated, r.userid, r.status, ' .
+            'r.error_message, r.error_details, r.error_code, ' . $userfields;
         $from = '{report_ai_analysis_reports} r LEFT JOIN {user} u ON r.userid = u.id';
 
         // Build WHERE clause based on context and permissions.
@@ -207,7 +209,27 @@ class reports_table extends table_sql {
                 $badgeclass .= 'badge-secondary';
         }
 
-        return html_writer::span($statustext, $badgeclass);
+        $status = html_writer::span($statustext, $badgeclass);
+        if ($row->status === 'failed') {
+            $status .= html_writer::div(
+                s(error_info::get_description($row->error_code ?? null)),
+                'small text-danger mt-1'
+            );
+            $debugdetails = error_info::get_debug_details(
+                $row->error_code ?? null,
+                $row->error_message ?? null,
+                $row->error_details ?? null
+            );
+            if ($debugdetails !== null) {
+                $status .= html_writer::tag(
+                    'pre',
+                    s(get_string('debuginfo', 'debug') . ': ' . $debugdetails),
+                    ['class' => 'small mt-1 mb-0']
+                );
+            }
+        }
+
+        return $status;
     }
 
     /**
