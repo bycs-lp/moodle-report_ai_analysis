@@ -17,11 +17,11 @@ Feature: View AI Analysis Reports
       | teacher1 | C1     | editingteacher |
       | manager1 | C1     | manager        |
     And the following "report_ai_analysis > reports" exist:
-      | title              | course | user     | status    | prompt                    |
-      | Completed Analysis | C1     | teacher1 | completed | Analyze conversations     |
-      | Pending Analysis   | C1     | teacher1 | pending   | Waiting for processing    |
-      | Failed Analysis    | C1     | teacher1 | failed    | This analysis failed      |
-      | Running Analysis   | C1     | teacher1 | running   | Currently processing      |
+      | title              | course | user     | status    | prompt                    | error_code               | error_message                                                                                      |
+      | Completed Analysis | C1     | teacher1 | completed | Analyze conversations     |                          |                                                                                                    |
+      | Pending Analysis   | C1     | teacher1 | pending   | Waiting for processing    |                          |                                                                                                    |
+      | Failed Analysis    | C1     | teacher1 | failed    | This analysis failed      | error_terms_not_accepted | You have not yet accepted the AI terms of use. Accept them before re-running the report.           |
+      | Running Analysis   | C1     | teacher1 | running   | Currently processing      |                          |                                                                                                    |
 
   Scenario: Teacher can view list of reports
     Given I am on the "Course 1" "Course" page logged in as "teacher1"
@@ -38,6 +38,14 @@ Feature: View AI Analysis Reports
     And I should see "Pending" in the "Pending Analysis" "table_row"
     And I should see "Failed" in the "Failed Analysis" "table_row"
     And I should see "Running" in the "Running Analysis" "table_row"
+
+  Scenario: Failed reports show the error message
+    Given I am on the "Course 1" "Course" page logged in as "teacher1"
+    When I navigate to "Reports > AI Conversation Analysis" in current page administration
+    Then I should see "You have not yet accepted the AI terms of use" in the "Failed Analysis" "table_row"
+    When I view the AI analysis report "Failed Analysis"
+    Then I should see "You have not yet accepted the AI terms of use" in the ".alert-danger" "css_element"
+    And I should see "Review and accept AI terms of use" in the ".alert-danger" "css_element"
 
   Scenario: View actions are available based on status
     Given I am on the "Course 1" "Course" page logged in as "teacher1"

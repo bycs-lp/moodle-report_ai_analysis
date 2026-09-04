@@ -209,8 +209,14 @@ class view_page implements renderable, templatable {
         // Error info (if failed).
         $data->haserror = $this->report->status === 'failed' && !empty($this->report->error_message);
         if ($data->haserror) {
-            $data->errormessage = format_string($this->report->error_message);
+            $errormessage = empty($this->report->error_code) || $this->report->error_code === 'error_unknown' ?
+                get_string('error_unknown', 'report_ai_analysis') : $this->report->error_message;
+            $data->errormessage = format_string($errormessage);
             $data->errorcode = $this->report->error_code ?? '';
+            $data->canacceptaiterms = $this->report->error_code === 'error_terms_not_accepted';
+            if ($data->canacceptaiterms) {
+                $data->acceptaitermsurl = new \moodle_url('/local/ai_manager/confirm_ai_usage.php');
+            }
         }
 
         // Raw data (if user has permission).

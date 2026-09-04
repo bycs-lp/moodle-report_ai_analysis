@@ -35,7 +35,7 @@ $confirm = optional_param('confirm', 0, PARAM_INT);
 require_sesskey();
 
 // Load report.
-global $DB;
+global $DB, $USER;
 $report = $DB->get_record('report_ai_analysis_reports', ['id' => $id], '*', MUST_EXIST);
 
 // Get context.

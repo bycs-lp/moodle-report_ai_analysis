@@ -45,6 +45,24 @@ class process_analysis_task extends adhoc_task {
     private const AI_PURPOSE = 'singleprompt';
 
     /**
+     * Error codes which are safe to show to users.
+     */
+    private const USER_ERROR_CODES = [
+        'error_ai_chat_not_available',
+        'error_ai_request',
+        'error_api_connection_error',
+        'error_api_timeout',
+        'error_empty_response',
+        'error_forum_not_available',
+        'error_no_data',
+        'error_prompt_too_long',
+        'error_purposenotconfigured',
+        'error_rate_limit',
+        'error_terms_not_accepted',
+        'error_unknown',
+    ];
+
+    /**
      * Maximum raw data length in bytes (hard cap to prevent memory issues).
      *
      * This hard limit protects against excessive memory usage and database storage
@@ -191,6 +209,12 @@ class process_analysis_task extends adhoc_task {
                 if (!empty($debuginfo)) {
                     mtrace("Debug info: " . $debuginfo);
                 }
+                if (
+                    $result->get_code() === 403 &&
+                    $result->get_errormessage() === get_string('error_http403notconfirmed', 'local_ai_manager')
+                ) {
+                    throw new \moodle_exception('error_terms_not_accepted', 'report_ai_analysis');
+                }
                 throw new \moodle_exception(
                     'error_ai_request',
                     'report_ai_analysis',
@@ -233,9 +257,10 @@ class process_analysis_task extends adhoc_task {
                 mtrace("Report {$reportid} failed, retry {$report->retry_count}/{$maxretries}.");
             } else {
                 // Mark as failed.
+                $errorcode = $this->get_error_code($e);
                 $report->status = 'failed';
-                $report->error_message = $e->getMessage();
-                $report->error_code = $this->get_error_code($e);
+                $report->error_message = $this->get_user_error_message($e, $errorcode);
+                $report->error_code = $errorcode;
                 $report->timemodified = time();
                 $DB->update_record('report_ai_analysis_reports', $report);
 
@@ -277,6 +302,10 @@ class process_analysis_task extends adhoc_task {
      * @return string Error code
      */
     private function get_error_code(\Exception $e): string {
+        if ($e instanceof \moodle_exception && in_array($e->errorcode, self::USER_ERROR_CODES, true)) {
+            return $e->errorcode;
+        }
+
         $message = strtolower($e->getMessage());
 
         if (stripos($message, 'timeout') !== false) {
@@ -293,5 +322,20 @@ class process_analysis_task extends adhoc_task {
         }
 
         return 'error_unknown';
+    }
+
+    /**
+     * Get an error message suitable for display to users.
+     *
+     * @param \Exception $e The exception
+     * @param string $errorcode Classified error code
+     * @return string User-safe error message
+     */
+    private function get_user_error_message(\Exception $e, string $errorcode): string {
+        if ($errorcode === 'error_ai_request') {
+            return $e->getMessage();
+        }
+
+        return get_string($errorcode, 'report_ai_analysis');
     }
 }

@@ -177,7 +177,10 @@
     {{#haserror}}
     <div class="alert alert-danger">
         <h5>{{#str}}error, moodle{{/str}}</h5>
-        <p><strong>{{errorcode}}</strong>: {{errormessage}}</p>
+        <p>{{errormessage}}</p>
+        {{#canacceptaiterms}}
+        <a href="{{{acceptaitermsurl}}}" class="alert-link">{{#str}}acceptaiterms, report_ai_analysis{{/str}}</a>
+        {{/canacceptaiterms}}
     </div>
     {{/haserror}}
 

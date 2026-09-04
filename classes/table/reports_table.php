@@ -98,7 +98,8 @@ class reports_table extends table_sql {
 
         // Join with user table to avoid N+1 queries.
         $userfields = \core_user\fields::for_name()->get_sql('u', false, '', '', false)->selects;
-        $fields = 'r.id, r.title, r.contextid, r.scope_details, r.timecreated, r.userid, r.status, ' . $userfields;
+        $fields = 'r.id, r.title, r.contextid, r.scope_details, r.timecreated, r.userid, r.status, ' .
+            'r.error_message, r.error_code, ' . $userfields;
         $from = '{report_ai_analysis_reports} r LEFT JOIN {user} u ON r.userid = u.id';
 
         // Build WHERE clause based on context and permissions.
@@ -207,7 +208,14 @@ class reports_table extends table_sql {
                 $badgeclass .= 'badge-secondary';
         }
 
-        return html_writer::span($statustext, $badgeclass);
+        $status = html_writer::span($statustext, $badgeclass);
+        if ($row->status === 'failed' && !empty($row->error_message)) {
+            $errormessage = empty($row->error_code) || $row->error_code === 'error_unknown' ?
+                get_string('error_unknown', 'report_ai_analysis') : $row->error_message;
+            $status .= html_writer::div(s($errormessage), 'small text-danger mt-1');
+        }
+
+        return $status;
     }
 
     /**

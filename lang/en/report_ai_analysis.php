@@ -25,6 +25,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
+$string['acceptaiterms'] = 'Review and accept AI terms of use';
 $string['activities'] = 'Activities';
 $string['add_template'] = 'Add new template';
 $string['ai_analysis:create'] = 'Create AI analysis reports';
@@ -81,6 +82,7 @@ $string['error_prompt_too_short'] = 'Prompt must be at least 10 characters long'
 $string['error_purposenotconfigured'] = 'The AI purpose "singleprompt" is not configured. Please contact your administrator.';
 $string['error_rate_limit'] = 'AI service rate limit reached';
 $string['error_saving_template'] = 'Error saving template';
+$string['error_terms_not_accepted'] = 'You have not yet accepted the AI terms of use. Accept them before re-running the report.';
 $string['error_title_too_long'] = 'Title must not exceed 255 characters';
 $string['error_title_too_short'] = 'Title must be at least 3 characters long';
 $string['error_unknown'] = 'Unknown error occurred';

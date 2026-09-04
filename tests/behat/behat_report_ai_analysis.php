@@ -86,6 +86,42 @@ class behat_report_ai_analysis extends behat_base {
     }
 
     /**
+     * Check if an adhoc task exists in the queue for a specific user.
+     *
+     * @Then /^an adhoc task "(?P<taskclass_string>(?:[^"]|\\")*)" should exist for user "(?P<username_string>(?:[^"]|\\")*)"$/
+     * @param string $taskclass The full class name of the task
+     * @param string $username The username assigned to the task
+     * @throws ExpectationException
+     */
+    public function adhoc_task_should_exist_for_user($taskclass, $username) {
+        global $DB;
+
+        $userid = $DB->get_field('user', 'id', ['username' => $username], MUST_EXIST);
+        $exists = $DB->record_exists('task_adhoc', [
+            'classname' => '\\' . ltrim($taskclass, '\\'),
+            'userid' => $userid,
+        ]);
+
+        if (!$exists) {
+            throw new ExpectationException(
+                "Adhoc task '$taskclass' was not found in the queue for user '$username'",
+                $this->getSession()
+            );
+        }
+    }
+
+    /**
+     * Open an AI analysis report by title.
+     *
+     * @When /^I view the AI analysis report "(?P<title_string>(?:[^"]|\\")*)"$/
+     * @param string $title The report title
+     */
+    public function i_view_ai_analysis_report(string $title): void {
+        $link = $this->get_selected_node('link', $title);
+        $this->execute_js_on_node($link, '{{ELEMENT}}.click();');
+    }
+
+    /**
      * Visit a URL with dynamic parameters (allows exceptions).
      *
      * @When /^I visit the url "(?P<url_string>(?:[^"]|\\")*)"$/

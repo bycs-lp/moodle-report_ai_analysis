@@ -25,6 +25,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
+$string['acceptaiterms'] = 'KI-Nutzungsbedingungen prüfen und akzeptieren';
 $string['activities'] = 'Aktivitäten';
 $string['add_template'] = 'Neue Vorlage hinzufügen';
 $string['ai_analysis:create'] = 'KI-Analyseberichte erstellen';
@@ -80,6 +81,7 @@ $string['error_prompt_too_short'] = 'Prompt muss mindestens 10 Zeichen lang sein
 $string['error_purposenotconfigured'] = 'Der KI-Zweck "singleprompt" ist nicht konfiguriert. Bitte kontaktieren Sie Ihren Administrator.';
 $string['error_rate_limit'] = 'Ratenlimit des KI-Services erreicht';
 $string['error_saving_template'] = 'Fehler beim Speichern der Vorlage';
+$string['error_terms_not_accepted'] = 'Sie haben die KI-Nutzungsbedingungen noch nicht akzeptiert. Akzeptieren Sie diese, bevor Sie den Bericht erneut ausführen.';
 $string['error_title_too_long'] = 'Titel darf maximal 255 Zeichen lang sein';
 $string['error_title_too_short'] = 'Titel muss mindestens 3 Zeichen lang sein';
 $string['error_unknown'] = 'Ein unbekannter Fehler ist aufgetreten';

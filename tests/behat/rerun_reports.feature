@@ -74,7 +74,7 @@ Feature: Re-run AI Analysis Reports
     And I navigate to "Reports > AI Conversation Analysis" in current page administration
     And I click on "Re-run" "link" in the "Completed Report" "table_row"
     When I click on "Continue" "button"
-    Then an adhoc task "report_ai_analysis\task\process_analysis_task" should exist
+    Then an adhoc task "report_ai_analysis\task\process_analysis_task" should exist for user "teacher1"
 
   Scenario: Teacher without rerun capability cannot re-run
     Given the following "permission overrides" exist:
