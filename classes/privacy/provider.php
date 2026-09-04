@@ -31,6 +31,7 @@ use core_privacy\local\request\approved_userlist;
 use core_privacy\local\request\contextlist;
 use core_privacy\local\request\userlist;
 use core_privacy\local\request\writer;
+use report_ai_analysis\error_info;
 
 /**
  * Privacy provider for report_ai_analysis.
@@ -62,6 +63,9 @@ class provider implements
                 'prompt' => 'privacy:metadata:report_ai_analysis_reports:prompt',
                 'ai_result' => 'privacy:metadata:report_ai_analysis_reports:ai_result',
                 'raw_data' => 'privacy:metadata:report_ai_analysis_reports:raw_data',
+                'error_message' => 'privacy:metadata:report_ai_analysis_reports:error_message',
+                'error_details' => 'privacy:metadata:report_ai_analysis_reports:error_details',
+                'error_code' => 'privacy:metadata:report_ai_analysis_reports:error_code',
                 'timecreated' => 'privacy:metadata:report_ai_analysis_reports:timecreated',
             ],
             'privacy:metadata:report_ai_analysis_reports'
@@ -139,7 +143,8 @@ class provider implements
                 'status' => $report->status,
                 'ai_result' => $report->ai_result,
                 'raw_data' => $report->raw_data,
-                'error_message' => $report->error_message,
+                'error_message' => $report->status === 'failed' ?
+                    error_info::get_description($report->error_code ?? null) : null,
                 'error_code' => $report->error_code,
                 'execution_time' => $report->execution_time,
                 'token_usage' => $report->token_usage,

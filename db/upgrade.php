@@ -85,5 +85,24 @@ function xmldb_report_ai_analysis_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2025102700, 'report', 'ai_analysis');
     }
 
+    if ($oldversion < 2026090400) {
+        $table = new xmldb_table('report_ai_analysis_reports');
+        $field = new xmldb_field('error_details', XMLDB_TYPE_TEXT, null, null, null, null, null, 'error_message');
+
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // Existing error messages may contain technical details and must no longer be treated as user-facing descriptions.
+        $DB->execute(
+            'UPDATE {report_ai_analysis_reports}
+                SET error_details = error_message,
+                    error_message = NULL
+              WHERE error_message IS NOT NULL'
+        );
+
+        upgrade_plugin_savepoint(true, 2026090400, 'report', 'ai_analysis');
+    }
+
     return true;
 }

@@ -241,6 +241,8 @@ if ($mform->is_cancelled()) {
             $report->ai_result = null;
             $report->raw_data = null;
             $report->error_message = null;
+            $report->error_details = null;
+            $report->error_code = null;
 
             // Queue adhoc task for processing.
             $task = new \report_ai_analysis\task\process_analysis_task();

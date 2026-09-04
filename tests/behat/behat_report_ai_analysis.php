@@ -118,7 +118,43 @@ class behat_report_ai_analysis extends behat_base {
      */
     public function i_view_ai_analysis_report(string $title): void {
         $link = $this->get_selected_node('link', $title);
-        $this->execute_js_on_node($link, '{{ELEMENT}}.click();');
+        $this->getSession()->executeScript(
+            'const topbar = document.querySelector("bycs-topbar"); if (topbar) { topbar.style.display = "none"; }'
+        );
+        $link->click();
+    }
+
+    /**
+     * Verify that a direct rerun request is rejected.
+     *
+     * @Then /^a direct rerun request for AI analysis report "(?P<title_string>(?:[^"]|\\")*)" should be rejected$/
+     * @param string $title Report title
+     * @throws ExpectationException
+     */
+    public function direct_rerun_request_should_be_rejected(string $title): void {
+        global $CFG, $DB;
+
+        require_once($CFG->libdir . '/filelib.php');
+
+        $reportid = $DB->get_field('report_ai_analysis_reports', 'id', ['title' => $title], MUST_EXIST);
+        $sesskey = $this->getSession()->evaluateScript('return M.cfg.sesskey;');
+        $url = new moodle_url('/report/ai_analysis/rerun.php', [
+            'id' => $reportid,
+            'sesskey' => $sesskey,
+        ]);
+
+        $sessionname = 'MoodleSession' . ($CFG->sessioncookie ?? '');
+        $sessionid = $this->getSession()->getCookie($sessionname);
+        $curl = new curl(['ignoresecurity' => true]);
+        $curl->setHeader("Cookie: {$sessionname}={$sessionid}");
+        $response = $curl->get($url->out(false));
+
+        if (!str_contains($response, 'nopermissions')) {
+            throw new ExpectationException(
+                "Direct rerun request for report '$title' was not rejected for missing capability",
+                $this->getSession()
+            );
+        }
     }
 
     /**
@@ -271,6 +307,30 @@ class behat_report_ai_analysis extends behat_base {
         if ($report->retry_count != $count) {
             throw new ExpectationException(
                 "Report retry count is {$report->retry_count}, expected $count",
+                $this->getSession()
+            );
+        }
+    }
+
+    /**
+     * Verify that a report has no stored error data.
+     *
+     * @Then /^the report "(?P<title_string>(?:[^"]|\\")*)" should have no stored error data$/
+     * @param string $title Report title
+     * @throws ExpectationException
+     */
+    public function report_should_have_no_stored_error_data(string $title): void {
+        global $DB;
+
+        $report = $DB->get_record(
+            'report_ai_analysis_reports',
+            ['title' => $title],
+            'error_message, error_details, error_code',
+            MUST_EXIST
+        );
+        if (!empty($report->error_message) || !empty($report->error_details) || !empty($report->error_code)) {
+            throw new ExpectationException(
+                "Report '$title' still contains stored error data",
                 $this->getSession()
             );
         }

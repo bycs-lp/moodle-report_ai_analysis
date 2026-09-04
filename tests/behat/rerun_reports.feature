@@ -15,12 +15,12 @@ Feature: Re-run AI Analysis Reports
       | user     | course | role           |
       | teacher1 | C1     | editingteacher |
     And the following "report_ai_analysis > reports" exist:
-      | title              | course | user     | status    | prompt                    |
-      | Completed Report   | C1     | teacher1 | completed | Completed analysis        |
-      | Failed Report      | C1     | teacher1 | failed    | Failed analysis           |
-      | Cancelled Report   | C1     | teacher1 | cancelled | Cancelled analysis        |
-      | Pending Report     | C1     | teacher1 | pending   | Pending analysis          |
-      | Running Report     | C1     | teacher1 | running   | Currently running         |
+      | title              | course | user     | status    | prompt                    | error_code   | error_message                  | error_details              |
+      | Completed Report   | C1     | teacher1 | completed | Completed analysis        |              |                                |                            |
+      | Failed Report      | C1     | teacher1 | failed    | Failed analysis           | error_unknown | Unknown error occurred         | Sensitive connector data   |
+      | Cancelled Report   | C1     | teacher1 | cancelled | Cancelled analysis        |              |                                |                            |
+      | Pending Report     | C1     | teacher1 | pending   | Pending analysis          |              |                                |                            |
+      | Running Report     | C1     | teacher1 | running   | Currently running         |              |                                |                            |
 
   Scenario: Re-run link is visible for completed reports
     Given I am on the "Course 1" "Course" page logged in as "teacher1"
@@ -68,6 +68,7 @@ Feature: Re-run AI Analysis Reports
     And I click on "Re-run" "link" in the "Failed Report" "table_row"
     When I press "Continue"
     Then I should see "Pending"
+    And the report "Failed Report" should have no stored error data
 
   Scenario: Re-running queues adhoc task
     Given I am on the "Course 1" "Course" page logged in as "teacher1"
@@ -83,3 +84,4 @@ Feature: Re-run AI Analysis Reports
     And I am on the "Course 1" "Course" page logged in as "teacher1"
     When I navigate to "Reports > AI Conversation Analysis" in current page administration
     Then I should not see "Re-run" in the "Completed Report" "table_row"
+    And a direct rerun request for AI analysis report "Completed Report" should be rejected
