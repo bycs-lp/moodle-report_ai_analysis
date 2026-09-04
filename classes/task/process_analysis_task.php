@@ -292,7 +292,7 @@ class process_analysis_task extends adhoc_task {
     /**
      * Get error code from exception.
      *
-    * @param \Throwable $e The throwable
+     * @param \Throwable $e The throwable
      * @return string Error code
      */
     private function get_error_code(\Throwable $e): string {

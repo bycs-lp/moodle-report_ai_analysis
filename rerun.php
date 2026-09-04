@@ -134,8 +134,8 @@ try {
 } catch (\Throwable $e) {
     try {
         $transaction->rollback($e);
-    } catch (\Throwable $ignored) {
-        // Rollback always rethrows the supplied exception.
+    } catch (\Throwable $rollbackexception) {
+        debugging('Error re-running AI analysis report: ' . $rollbackexception->getMessage(), DEBUG_DEVELOPER);
     }
     redirect(
         $indexurl,
