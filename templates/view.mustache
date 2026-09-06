@@ -27,7 +27,7 @@
     * contextname - Name of the context
     * timecreated - Creation timestamp
     * creator - Name of creator
-    * scopedetails - Details about analysis scope
+    * scopeitems - List of plain label/value pairs describing the scope
     * prompt - AI prompt text
     * haveresult - Whether analysis has result
     * airesult - AI analysis result (HTML)
@@ -40,7 +40,10 @@
     * errorcode - Error code
     * errormessage - Error message
     * canviewrawdata - Whether user can view raw data
-    * rawdata - Raw data JSON
+    * rawdata - Raw source text, escaped by the template
+    * truncated - Whether the source/prompt budget limited the analysis
+    * canexport - Whether the report is completed or failed
+    * aiactionsdisabled - Whether AI-dependent actions are currently unavailable
     * canedit - Whether user can edit
     * canrerun - Whether user can rerun
     * candelete - Whether user can delete
@@ -60,7 +63,7 @@
         "contextname": "Introduction to AI (Course)",
         "timecreated": "2025-01-15 10:30",
         "creator": "John Doe",
-        "scopedetails": "All activities in course",
+        "scopeitems": [{"label": "Data sources", "value": "2"}],
         "prompt": "Analyze student engagement patterns",
         "haveresult": true,
         "airesult": "<p>Analysis results...</p>",
@@ -73,22 +76,23 @@
         "errorcode": "",
         "errormessage": "",
         "canviewrawdata": true,
+        "canexport": true,
         "rawdata": "{\"data\": \"value\"}",
         "canedit": true,
         "canrerun": true,
         "candelete": true,
-        "editurl": "/report/ai_analysis/edit.php?id=123",
+        "editurl": "/report/ai_analysis/create.php?reportid=123&courseid=42",
         "rerunurl": "/report/ai_analysis/rerun.php?id=123",
-        "deleteurl": "/report/ai_analysis/delete.php?id=123",
+        "deleteurl": "/report/ai_analysis/view.php?id=123&action=delete",
         "exportjsonurl": "/report/ai_analysis/export.php?id=123&format=json",
         "exporthtmlurl": "/report/ai_analysis/export.php?id=123&format=html",
-        "indexurl": "/report/ai_analysis/index.php?id=42"
+        "indexurl": "/report/ai_analysis/index.php?courseid=42"
     }
 }}
 
 <div class="report-ai-analysis-view">
     <div class="mb-3">
-        <a href="{{{indexurl}}}" class="btn btn-secondary">
+        <a href="{{indexurl}}" class="btn btn-secondary">
             &larr; {{#str}}back{{/str}}
         </a>
     </div>
@@ -98,14 +102,14 @@
             {{#title}}
             <h3 class="mb-0">{{title}}</h3>
             {{/title}}
-            <span class="{{{statusbadgeclass}}}">{{statustext}}</span>
+            <span class="{{statusbadgeclass}}">{{statustext}}</span>
         </div>
         <div class="card-body">
             <dl class="row">
                 <dt class="col-sm-3">{{#str}}status, report_ai_analysis{{/str}}</dt>
                 <dd class="col-sm-9">{{statustext}}</dd>
 
-                <dt class="col-sm-3">{{#str}}context_system, report_ai_analysis{{/str}}</dt>
+                <dt class="col-sm-3">{{#str}}coursename, report_ai_analysis{{/str}}</dt>
                 <dd class="col-sm-9">{{contextname}}</dd>
 
                 <dt class="col-sm-3">{{#str}}created, report_ai_analysis{{/str}}</dt>
@@ -115,10 +119,24 @@
                 <dd class="col-sm-9">{{creator}}</dd>
 
                 <dt class="col-sm-3">{{#str}}scope, report_ai_analysis{{/str}}</dt>
-                <dd class="col-sm-9">{{scopedetails}}</dd>
+                <dd class="col-sm-9">
+                    <ul class="mb-0 report-ai-analysis-scope">
+                        {{#scopeitems}}
+                        <li><strong>{{label}}</strong>: {{value}}</li>
+                        {{/scopeitems}}
+                        {{^scopeitems}}<li>-</li>{{/scopeitems}}
+                    </ul>
+                </dd>
             </dl>
         </div>
     </div>
+
+    {{#isprocessing}}
+    <div class="alert alert-info">{{#str}}cancelwarning, report_ai_analysis{{/str}}</div>
+    {{/isprocessing}}
+    {{#truncated}}
+    <div class="alert alert-warning">{{#str}}analysis_truncated, report_ai_analysis{{/str}}</div>
+    {{/truncated}}
 
     <div class="card mb-3">
         <div class="card-header">
@@ -135,6 +153,9 @@
             <h4>{{#str}}analysis_result, report_ai_analysis{{/str}}</h4>
         </div>
         <div class="card-body">
+            <div data-region="ai-result-warning" class="mb-3">
+                {{> local_ai_manager/ai_info_warning }}
+            </div>
             <div class="ai-result">{{{airesult}}}</div>
         </div>
     </div>
@@ -183,7 +204,7 @@
         <pre class="mb-0">{{errordetails}}</pre>
         {{/haserrordetails}}
         {{#canacceptaiterms}}
-        <a href="{{{acceptaitermsurl}}}" class="alert-link">{{#str}}acceptaiterms, report_ai_analysis{{/str}}</a>
+        <a href="{{acceptaitermsurl}}" class="alert-link">{{#str}}acceptaiterms, report_ai_analysis{{/str}}</a>
         {{/canacceptaiterms}}
     </div>
     {{/haserror}}
@@ -195,38 +216,56 @@
             <h5>{{#str}}raw_data, report_ai_analysis{{/str}}</h5>
         </div>
         <div class="card-body">
-            <pre class="raw-data">{{{rawdata}}}</pre>
+            <pre class="raw-data">{{rawdata}}</pre>
         </div>
     </div>
     {{/rawdata}}
     {{/canviewrawdata}}
 
+    {{#aiactionsdisabled}}
+    <div class="alert alert-warning">{{{availabilitymessage}}}</div>
+    {{/aiactionsdisabled}}
     <div class="mb-3">
         <div class="btn-group" role="group">
             {{#canedit}}
-            <a href="{{{editurl}}}" class="btn btn-primary">
+            {{^aiactionsdisabled}}
+            <a href="{{editurl}}" class="btn btn-primary">
                 {{#str}}edit, report_ai_analysis{{/str}}
             </a>
+            {{/aiactionsdisabled}}
+            {{#aiactionsdisabled}}
+            <button type="button" class="btn btn-primary" disabled>{{#str}}edit, report_ai_analysis{{/str}}</button>
+            {{/aiactionsdisabled}}
             {{/canedit}}
             {{#canrerun}}
-            <a href="{{{rerunurl}}}" class="btn btn-warning">
+            {{^aiactionsdisabled}}
+            <a href="{{rerunurl}}" class="btn btn-warning">
                 {{#str}}rerun, report_ai_analysis{{/str}}
             </a>
+            {{/aiactionsdisabled}}
+            {{#aiactionsdisabled}}
+            <button type="button" class="btn btn-warning" disabled>{{#str}}rerun, report_ai_analysis{{/str}}</button>
+            {{/aiactionsdisabled}}
             {{/canrerun}}
+            {{#cancancel}}
+            <a href="{{cancelurl}}" class="btn btn-warning">{{#str}}cancel, report_ai_analysis{{/str}}</a>
+            {{/cancancel}}
             {{#candelete}}
-            <a href="{{{deleteurl}}}" class="btn btn-danger" id="delete-report-btn" role="button">
+            <a href="{{deleteurl}}" class="btn btn-danger" id="delete-report-btn" role="button">
                 {{#str}}delete, report_ai_analysis{{/str}}
             </a>
             {{/candelete}}
         </div>
 
+        {{#canexport}}
         <div class="btn-group ml-2" role="group">
-            <a href="{{{exportjsonurl}}}" class="btn btn-secondary">
-                <i class="icon fa fa-download"></i> {{#str}}exportjson, report_ai_analysis{{/str}}
+            <a href="{{exportjsonurl}}" class="btn btn-secondary">
+                <i class="icon fa fa-download" aria-hidden="true"></i> {{#str}}exportjson, report_ai_analysis{{/str}}
             </a>
-            <a href="{{{exporthtmlurl}}}" class="btn btn-secondary">
-                <i class="icon fa fa-file-code-o"></i> {{#str}}exporthtml, report_ai_analysis{{/str}}
+            <a href="{{exporthtmlurl}}" class="btn btn-secondary">
+                <i class="icon fa fa-file-code-o" aria-hidden="true"></i> {{#str}}exporthtml, report_ai_analysis{{/str}}
             </a>
         </div>
+        {{/canexport}}
     </div>
 </div>

@@ -25,6 +25,10 @@
 
 require_once(__DIR__ . '/../../config.php');
 
+use report_ai_analysis\local\report_access;
+use report_ai_analysis\local\report_manager;
+use report_ai_analysis\output\ai_availability;
+
 require_login();
 
 // Get parameters.
@@ -35,14 +39,18 @@ $confirm = optional_param('confirm', 0, PARAM_INT);
 require_sesskey();
 
 // Load report.
-global $DB, $USER;
+global $DB, $OUTPUT;
 $report = $DB->get_record('report_ai_analysis_reports', ['id' => $id], '*', MUST_EXIST);
 
 // Get context.
 $context = context::instance_by_id($report->contextid);
+if ($context->contextlevel !== CONTEXT_COURSE) {
+    throw new moodle_exception('error_contextmismatch', 'report_ai_analysis');
+}
+require_login($context->instanceid, false);
 
 // Check permissions.
-require_capability('report/ai_analysis:rerun', $context);
+report_access::require_manage($report, 'report/ai_analysis:rerun');
 
 // Set up page.
 $PAGE->set_url('/report/ai_analysis/rerun.php', ['id' => $id]);
@@ -56,6 +64,18 @@ if ($report->status !== 'completed' && $report->status !== 'failed' && $report->
     throw new moodle_exception('cannotrerunreport', 'report_ai_analysis');
 }
 
+$indexurl = new moodle_url('/report/ai_analysis/index.php', ['courseid' => $context->instanceid]);
+$availability = \core\di::get(ai_availability::class)->get_availability($context);
+if ($availability['state'] !== 'available') {
+    echo $OUTPUT->header();
+    if ($availability['state'] === 'disabled') {
+        echo $OUTPUT->notification($availability['message'], \core\output\notification::NOTIFY_WARNING);
+    }
+    echo $OUTPUT->single_button($indexurl, get_string('back'), 'get');
+    echo $OUTPUT->footer();
+    exit;
+}
+
 // If not confirmed, show confirmation page.
 if (!$confirm) {
     echo $OUTPUT->header();
@@ -67,80 +87,20 @@ if (!$confirm) {
         'sesskey' => sesskey(),
     ]);
 
-    // Build cancel URL to index page based on context.
-    $indexparams = [];
-    if ($context->contextlevel === CONTEXT_COURSE) {
-        $indexparams['id'] = $context->instanceid;
-    } else if ($context->contextlevel === CONTEXT_MODULE) {
-        $indexparams['cmid'] = $context->instanceid;
-    } else if ($context->contextlevel === CONTEXT_COURSECAT) {
-        $indexparams['categoryid'] = $context->instanceid;
-    }
-    $cancelurl = new moodle_url('/report/ai_analysis/index.php', $indexparams);
-
     echo $OUTPUT->confirm(
-        get_string('rerunreportconfirm', 'report_ai_analysis', format_string($report->title)),
+        get_string('rerunreportconfirm', 'report_ai_analysis', s($report->title)),
         $confirmurl,
-        $cancelurl
+        $indexurl
     );
 
     echo $OUTPUT->footer();
     exit;
 }
 
-// Re-run the report by resetting status and scheduling task.
-$transaction = $DB->start_delegated_transaction();
-$indexparams = [];
-if ($context->contextlevel === CONTEXT_COURSE) {
-    $indexparams['id'] = $context->instanceid;
-} else if ($context->contextlevel === CONTEXT_MODULE) {
-    $indexparams['cmid'] = $context->instanceid;
-} else if ($context->contextlevel === CONTEXT_COURSECAT) {
-    $indexparams['categoryid'] = $context->instanceid;
-}
-$indexurl = new moodle_url('/report/ai_analysis/index.php', $indexparams);
-
-try {
-    // Reset report status.
-    $report->status = 'pending';
-    $report->error_message = null;
-    $report->error_details = null;
-    $report->error_code = null;
-    $report->ai_result = null;
-    $report->raw_data = null;
-    $report->timecompleted = null;
-    $report->retry_count = 0;
-    $report->timemodified = time();
-
-    $DB->update_record('report_ai_analysis_reports', $report);
-
-    // Schedule adhoc task to process the report.
-    $task = new \report_ai_analysis\task\process_analysis_task();
-    $task->set_custom_data([
-        'reportid' => $report->id,
-    ]);
-    $task->set_userid($USER->id);
-    \core\task\manager::queue_adhoc_task($task);
-
-    $transaction->allow_commit();
-
-    // Redirect to index page with success message.
-    redirect(
-        $indexurl,
-        get_string('reportrerunsuccess', 'report_ai_analysis'),
-        null,
-        \core\output\notification::NOTIFY_SUCCESS
-    );
-} catch (\Throwable $e) {
-    try {
-        $transaction->rollback($e);
-    } catch (\Throwable $rollbackexception) {
-        debugging('Error re-running AI analysis report: ' . $rollbackexception->getMessage(), DEBUG_DEVELOPER);
-    }
-    redirect(
-        $indexurl,
-        get_string('errorrerunningreport', 'report_ai_analysis'),
-        null,
-        \core\output\notification::NOTIFY_ERROR
-    );
-}
+report_manager::rerun($id);
+redirect(
+    $indexurl,
+    get_string('reportrerunsuccess', 'report_ai_analysis'),
+    null,
+    \core\output\notification::NOTIFY_SUCCESS
+);

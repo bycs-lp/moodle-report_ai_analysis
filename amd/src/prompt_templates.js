@@ -24,10 +24,8 @@
 
 /**
  * Initialize prompt templates for dropdown variant.
- *
- * @param {Object} templates Template data indexed by template ID
  */
-export const init = (templates) => {
+export const init = () => {
     const selector = document.getElementById('id_template_selector');
     const promptField = document.getElementById('id_prompt');
 
@@ -36,9 +34,10 @@ export const init = (templates) => {
     }
 
     selector.addEventListener('change', () => {
-        const selectedId = selector.value;
-        if (selectedId && templates[selectedId]) {
-            promptField.value = templates[selectedId].prompt;
+        const prompt = selector.selectedOptions[0]?.dataset.prompt;
+        if (prompt !== undefined && !promptField.disabled) {
+            promptField.value = prompt;
+            promptField.dispatchEvent(new Event('input', {bubbles: true}));
         }
     });
 };
@@ -57,8 +56,9 @@ export const initButtons = () => {
         btn.addEventListener('click', (e) => {
             e.preventDefault();
             const prompt = btn.dataset.prompt;
-            if (prompt) {
+            if (prompt !== undefined && !promptField.disabled) {
                 promptField.value = prompt;
+                promptField.dispatchEvent(new Event('input', {bubbles: true}));
             }
         });
     });

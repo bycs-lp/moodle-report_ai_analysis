@@ -23,12 +23,10 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-require_once('../../config.php');
+require_once(__DIR__ . '/../../config.php');
 
-use moodle_url;
-use html_writer;
-use context_course;
-
+use report_ai_analysis\local\report_access;
+use report_ai_analysis\local\report_manager;
 use report_ai_analysis\output\view_page;
 
 require_login();
@@ -39,53 +37,30 @@ $action = optional_param('action', '', PARAM_ALPHA);
 $confirm = optional_param('confirm', 0, PARAM_INT);
 
 // Load report.
-global $DB;
+global $DB, $OUTPUT;
 $report = $DB->get_record('report_ai_analysis_reports', ['id' => $id], '*', MUST_EXIST);
 
 // Get context (always course context).
 $context = context::instance_by_id($report->contextid);
-require_login($context->instanceid);
+if ($context->contextlevel !== CONTEXT_COURSE) {
+    throw new moodle_exception('error_contextmismatch', 'report_ai_analysis');
+}
+require_login($context->instanceid, false);
 
 // Check permissions.
-require_capability('report/ai_analysis:view', $context);
+report_access::require_view($report);
 
 // Handle delete action.
 if ($action === 'delete') {
     require_sesskey();
 
     // Check delete permission.
-    require_capability('report/ai_analysis:delete', $context);
+    report_access::require_manage($report, 'report/ai_analysis:delete');
 
     if ($confirm) {
-        // Delete the report.
-        $DB->delete_records('report_ai_analysis_reports', ['id' => $id]);
-
-        // Trigger event.
-        $event = \report_ai_analysis\event\report_deleted::create([
-            'context' => $context,
-            'objectid' => $id,
-            'other' => [
-                'title' => $report->title,
-            ],
-        ]);
-        $event->trigger();
-
-        // Redirect back to index.
-        $redirectparams = [];
-        switch ($context->contextlevel) {
-            case CONTEXT_COURSE:
-                $redirectparams['id'] = $context->instanceid;
-                break;
-            case CONTEXT_MODULE:
-                $redirectparams['cmid'] = $context->instanceid;
-                break;
-            case CONTEXT_COURSECAT:
-                $redirectparams['categoryid'] = $context->instanceid;
-                break;
-        }
-
+        report_manager::delete($id);
         redirect(
-            new moodle_url('/report/ai_analysis/index.php', $redirectparams),
+            new moodle_url('/report/ai_analysis/index.php', ['courseid' => $context->instanceid]),
             get_string('reportdeleted', 'report_ai_analysis'),
             null,
             \core\output\notification::NOTIFY_SUCCESS
@@ -109,18 +84,12 @@ if ($action === 'delete') {
         'confirm' => 1,
         'sesskey' => sesskey(),
     ]);
-    $cancelurl = new moodle_url('/report/ai_analysis/index.php', ['id' => $context->instanceid]);
-
-    echo $OUTPUT->box(
+    $cancelurl = new moodle_url('/report/ai_analysis/view.php', ['id' => $id]);
+    echo $OUTPUT->confirm(
         get_string('confirmdelete', 'report_ai_analysis', s($report->title)),
-        'generalbox',
-        'confirmdeletebox'
+        $confirmurl,
+        $cancelurl
     );
-    echo html_writer::start_div('mb-3');
-    echo html_writer::link($confirmurl, get_string('delete', 'report_ai_analysis'), ['class' => 'btn btn-danger']);
-    echo ' ';
-    echo html_writer::link($cancelurl, get_string('cancel', 'report_ai_analysis'), ['class' => 'btn btn-secondary']);
-    echo html_writer::end_div();
 
     echo $OUTPUT->footer();
     exit;
@@ -138,6 +107,13 @@ $PAGE->set_heading($report->title);
 $output = $PAGE->get_renderer('report_ai_analysis');
 $page = new view_page($report, $context);
 
-echo $output->header();
+if ($report->status === 'completed' && !empty($report->ai_result)) {
+    $PAGE->requires->js_call_amd('report_ai_analysis/ai_widgets', 'initWarning', [
+        '[data-region="ai-result-warning"]',
+        get_string('aiunavailable', 'report_ai_analysis'),
+    ]);
+}
+
+echo $OUTPUT->header();
 echo $output->render($page);
-echo $output->footer();
+echo $OUTPUT->footer();

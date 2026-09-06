@@ -26,6 +26,10 @@
 require_once(__DIR__ . '/../../config.php');
 
 use report_ai_analysis\output\index_page;
+use report_ai_analysis\local\report_access;
+use report_ai_analysis\local\report_manager;
+
+global $DB, $OUTPUT;
 
 // Course ID is required.
 $courseid = optional_param('courseid', 0, PARAM_INT);
@@ -42,7 +46,7 @@ $PAGE->set_context($context);
 require_capability('report/ai_analysis:view', $context);
 
 // Set up page.
-$url = new moodle_url('/report/ai_analysis/index.php', ['id' => $courseid]);
+$url = new moodle_url('/report/ai_analysis/index.php', ['courseid' => $courseid]);
 
 $PAGE->set_url($url);
 $PAGE->set_pagelayout('report');
@@ -55,41 +59,23 @@ $reportid = optional_param('reportid', 0, PARAM_INT);
 $confirm = optional_param('confirm', 0, PARAM_INT);
 
 if ($action && $reportid) {
-    global $DB;
-
     $report = $DB->get_record('report_ai_analysis_reports', ['id' => $reportid], '*', MUST_EXIST);
 
     // Get report context.
     $reportcontext = context::instance_by_id($report->contextid);
 
-    // Verify report belongs to accessible context - course context or parent.
-    // Reports are always in course context, check if it matches current course.
-    if ($reportcontext->contextlevel == CONTEXT_COURSE && $reportcontext->instanceid != $courseid) {
+    if ($reportcontext->contextlevel !== CONTEXT_COURSE || (int) $reportcontext->instanceid !== $courseid) {
         throw new moodle_exception('error_contextmismatch', 'report_ai_analysis');
     }
 
-    // Verify user has permission to perform action on this report.
-
     if ($action === 'delete') {
-        require_capability('report/ai_analysis:delete', $reportcontext);
+        report_access::require_manage($report, 'report/ai_analysis:delete');
 
-        if ($confirm && confirm_sesskey()) {
-            // Actually delete the report.
-            $DB->delete_records('report_ai_analysis_reports', ['id' => $reportid]);
-
-            // Trigger event.
-            $event = \report_ai_analysis\event\report_deleted::create([
-                'context' => $reportcontext,
-                'objectid' => $reportid,
-                'other' => [
-                    'title' => $report->title,
-                ],
-            ]);
-            $event->trigger();
-
-            $redirecturl = new moodle_url('/report/ai_analysis/index.php', ['id' => $courseid]);
+        if ($confirm) {
+            require_sesskey();
+            report_manager::delete($reportid);
             $message = get_string('reportdeleted', 'report_ai_analysis');
-            redirect($redirecturl, $message, null, \core\output\notification::NOTIFY_SUCCESS);
+            redirect($url, $message, null, \core\output\notification::NOTIFY_SUCCESS);
         } else {
             // Show confirmation page.
             $PAGE->set_title(get_string('deletereport', 'report_ai_analysis'));
@@ -99,13 +85,13 @@ if ($action && $reportid) {
             echo $OUTPUT->heading(get_string('deletereport', 'report_ai_analysis'));
 
             $confirmurl = new moodle_url('/report/ai_analysis/index.php', [
-                'id' => $courseid,
+                'courseid' => $courseid,
                 'action' => 'delete',
                 'reportid' => $reportid,
                 'confirm' => 1,
                 'sesskey' => sesskey(),
             ]);
-            $cancelurl = new moodle_url('/report/ai_analysis/index.php', ['id' => $courseid]);
+            $cancelurl = new moodle_url('/report/ai_analysis/index.php', ['courseid' => $courseid]);
 
             echo $OUTPUT->confirm(
                 get_string('confirmdelete', 'report_ai_analysis', s($report->title)),
@@ -116,9 +102,10 @@ if ($action && $reportid) {
             echo $OUTPUT->footer();
             exit;
         }
-    } else if ($action === 'cancel' && confirm_sesskey()) {
-        require_capability('report/ai_analysis:delete', $reportcontext);
-        $DB->set_field('report_ai_analysis_reports', 'status', 'cancelled', ['id' => $reportid]);
+    } else if ($action === 'cancel') {
+        report_access::require_manage($report, 'report/ai_analysis:delete');
+        require_sesskey();
+        report_manager::cancel($reportid);
         redirect($url, get_string('reportcancelled', 'report_ai_analysis'), null, \core\output\notification::NOTIFY_SUCCESS);
     }
 }
@@ -127,6 +114,6 @@ if ($action && $reportid) {
 $output = $PAGE->get_renderer('report_ai_analysis');
 $page = new index_page($courseid);
 
-echo $output->header();
+echo $OUTPUT->header();
 echo $output->render($page);
-echo $output->footer();
+echo $OUTPUT->footer();

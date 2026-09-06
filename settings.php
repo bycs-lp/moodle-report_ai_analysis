@@ -23,6 +23,8 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+use report_ai_analysis\local\admin_setting_positive_int;
+
 defined('MOODLE_INTERNAL') || die();
 
 if ($ADMIN->fulltree) {
@@ -36,12 +38,12 @@ if ($ADMIN->fulltree) {
     ));
 
     // Max records per analysis.
-    $settings->add(new admin_setting_configtext(
+    $settings->add(new admin_setting_positive_int(
         'report_ai_analysis/max_records_per_analysis',
         get_string('max_records_per_analysis', 'report_ai_analysis'),
         get_string('max_records_per_analysis_desc', 'report_ai_analysis'),
         1000,
-        PARAM_INT
+        10000
     ));
 
     // Store raw data.
@@ -53,12 +55,12 @@ if ($ADMIN->fulltree) {
     ));
 
     // Truncate raw data length.
-    $settings->add(new admin_setting_configtext(
+    $settings->add(new admin_setting_positive_int(
         'report_ai_analysis/truncate_raw_data_length',
         get_string('truncate_raw_data_length', 'report_ai_analysis'),
         get_string('truncate_raw_data_length_desc', 'report_ai_analysis'),
         50000,
-        PARAM_INT
+        500000
     ));
 
     // Retry on failure.
@@ -73,15 +75,6 @@ if ($ADMIN->fulltree) {
             2 => '2',
             3 => '3',
         ]
-    ));
-
-    // Timeout seconds.
-    $settings->add(new admin_setting_configtext(
-        'report_ai_analysis/timeout_seconds',
-        get_string('timeout_seconds', 'report_ai_analysis'),
-        get_string('timeout_seconds_desc', 'report_ai_analysis'),
-        60,
-        PARAM_INT
     ));
 
     // Share reports in course.

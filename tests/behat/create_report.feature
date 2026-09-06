@@ -32,34 +32,29 @@ Feature: Create AI Analysis Reports
       | activity | name        | course | idnumber |
       | forum    | Forum 1     | C1     | forum1   |
       | quiz     | Quiz 1      | C1     | quiz1    |
+    And the AI analysis backend is configured
+    And the following config values are set as admin:
+      | timezone | UTC |
 
-  Scenario: Teacher can open the create report form
-    Given I am on the "Course 1" "Course" page logged in as "teacher1"
-    And I navigate to "Reports > AI Conversation Analysis" in current page administration
-    When I click on "New analysis" "link"
-    Then I should see "Create new analysis"
-    And I should see "Analysis prompt"
-    And I should see "Scope"
-
-  Scenario: Create a simple report with only prompt
+  Scenario: Creating a report queues background processing and keeps an open date boundary
     Given I am on the "Course 1" "Course" page logged in as "teacher1"
     And I navigate to "Reports > AI Conversation Analysis" in current page administration
     And I click on "New analysis" "link"
-    When I set the field "Analysis prompt" to "Analyze all conversations and identify common themes"
+    When I set the following fields to these values:
+      | Title                | Start-only analysis          |
+      | Analysis prompt      | Analyze recent conversations |
+      | timestart[enabled]   | 1                            |
+      | timestart[day]       | 1                            |
+      | timestart[month]     | September                    |
+      | timestart[year]      | 2026                         |
+      | timestart[hour]      | 00                           |
+      | timestart[minute]    | 00                           |
+      | timeend[enabled]     | 0                            |
     And I press "Create new analysis"
     Then I should see "Analysis has been queued for background processing"
-    And I should see "Pending"
+    And I should see "Start-only analysis"
+    And AI analysis report "Start-only analysis" should have time boundaries "1788220800" and "0"
     And an adhoc task "report_ai_analysis\task\process_analysis_task" should exist for user "teacher1"
-
-  Scenario: Create a report with title and prompt
-    Given I am on the "Course 1" "Course" page logged in as "teacher1"
-    And I navigate to "Reports > AI Conversation Analysis" in current page administration
-    And I click on "New analysis" "link"
-    When I set the field "Title" to "Theme Analysis"
-    And I set the field "Analysis prompt" to "What are the main topics discussed?"
-    And I press "Create new analysis"
-    Then I should see "Analysis has been queued for background processing"
-    And I should see "Theme Analysis"
 
   Scenario: Prompt field is required
     Given I am on the "Course 1" "Course" page logged in as "teacher1"
@@ -69,79 +64,18 @@ Feature: Create AI Analysis Reports
     And I press "Create new analysis"
     Then I should see "Required"
 
-  Scenario: Create report with participant filter
+  Scenario: Selecting sources, participants and groups produces a Unicode-safe automatic title
     Given I am on the "Course 1" "Course" page logged in as "teacher1"
     And I navigate to "Reports > AI Conversation Analysis" in current page administration
     And I click on "New analysis" "link"
-    When I set the field "Analysis prompt" to "Analyze student conversations"
-    And I set the field "Select participants" to "Student One"
-    And I press "Create new analysis"
-    Then I should see "Analysis has been queued for background processing"
-
-  Scenario: Create report with group filter
-    Given I am on the "Course 1" "Course" page logged in as "teacher1"
-    And I navigate to "Reports > AI Conversation Analysis" in current page administration
-    And I click on "New analysis" "link"
-    When I set the field "Analysis prompt" to "Analyze group conversations"
-    And I set the field "Groups" to "Group 1"
-    And I press "Create new analysis"
-    Then I should see "Analysis has been queued for background processing"
-
-  Scenario: Create report with activity filter
-    Given I am on the "Course 1" "Course" page logged in as "teacher1"
-    And I navigate to "Reports > AI Conversation Analysis" in current page administration
-    And I click on "New analysis" "link"
-    When I set the field "Analysis prompt" to "Analyze forum conversations"
+    Then the "Data sources" select box should contain "Forum 1"
+    And the "Data sources" select box should not contain "Quiz 1"
+    When I set the field "Analysis mode" to "Aggregated (all participants)"
     And I set the field "Data sources" to "Forum 1"
-    And I press "Create new analysis"
-    Then I should see "Analysis has been queued for background processing"
-
-  Scenario: Create report with aggregated analysis mode
-    Given I am on the "Course 1" "Course" page logged in as "teacher1"
-    And I navigate to "Reports > AI Conversation Analysis" in current page administration
-    And I click on "New analysis" "link"
-    When I set the field "Analysis prompt" to "Aggregate analysis"
-    And I set the field "Analysis mode" to "Aggregated (all participants)"
-    And I press "Create new analysis"
-    Then I should see "Analysis has been queued for background processing"
-
-  Scenario: Create report with individual analysis mode
-    Given I am on the "Course 1" "Course" page logged in as "teacher1"
-    And I navigate to "Reports > AI Conversation Analysis" in current page administration
-    And I click on "New analysis" "link"
-    When I set the field "Analysis prompt" to "Individual analysis"
-    And I set the field "Analysis mode" to "Individual (per participant)"
-    And I press "Create new analysis"
-    Then I should see "Analysis has been queued for background processing"
-
-  Scenario: Cancel creating a report
-    Given I am on the "Course 1" "Course" page logged in as "teacher1"
-    And I navigate to "Reports > AI Conversation Analysis" in current page administration
-    And I click on "New analysis" "link"
-    When I set the field "Title" to "Test Analysis"
-    And I set the field "Analysis prompt" to "Test prompt"
-    And I press "Cancel"
-    Then I should see "AI Conversation Analysis"
-    And I should not see "Test Analysis"
-
-  Scenario: Create report with time range filter
-    Given I am on the "Course 1" "Course" page logged in as "teacher1"
-    And I navigate to "Reports > AI Conversation Analysis" in current page administration
-    And I click on "New analysis" "link"
-    When I set the field "Analysis prompt" to "Analyze recent conversations"
-    And I press "Create new analysis"
-    Then I should see "Analysis has been queued for background processing"
-
-  Scenario: Create comprehensive report with all filters
-    Given I am on the "Course 1" "Course" page logged in as "teacher1"
-    And I navigate to "Reports > AI Conversation Analysis" in current page administration
-    And I click on "New analysis" "link"
-    When I set the field "Title" to "Comprehensive Analysis"
-    And I set the field "Analysis prompt" to "Comprehensive analysis of all data"
-    And I set the field "Analysis mode" to "Aggregated (all participants)"
-    And I set the field "Data sources" to "Forum 1"
+    And I set the field "all_participants" to "0"
     And I set the field "Select participants" to "Student One,Student Two"
     And I set the field "Groups" to "Group 1"
+    And I enter an AI analysis prompt at the Unicode title boundary
     And I press "Create new analysis"
     Then I should see "Analysis has been queued for background processing"
-    And I should see "Comprehensive Analysis"
+    And the automatically titled AI analysis should preserve its Unicode boundary

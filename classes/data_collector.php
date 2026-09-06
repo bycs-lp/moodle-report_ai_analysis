@@ -18,14 +18,17 @@
  * Data collector for AI conversation and discussion data.
  *
  * @package    report_ai_analysis
- * @copyright  2025 PeMaSoft, Dr. Peter Mayer
+ * @copyright  2026 ISB Bayern
+ * @author     Dr. Peter Mayer
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 namespace report_ai_analysis;
 
 use core\di;
-use report_ai_analysis\provider\provider_factory;
+use core_text;
+use report_ai_analysis\local\provider\base_provider;
+use report_ai_analysis\local\provider\provider_factory;
 
 /**
  * Collects conversation data using provider pattern.
@@ -35,6 +38,9 @@ use report_ai_analysis\provider\provider_factory;
  * called statically.
  */
 class data_collector {
+    /** @var int Maximum characters in formatted source data, excluding the caller's instructions. */
+    public const MAX_FORMATTED_LENGTH = 1000000;
+
     /** @var scope_builder The scope builder. */
     private scope_builder $scopebuilder;
 
@@ -43,6 +49,12 @@ class data_collector {
 
     /** @var int Maximum records to collect. */
     private int $maxrecords;
+
+    /** @var bool Whether record collection or formatting was limited. */
+    private bool $truncated = false;
+
+    /** @var array<string, class-string<base_provider>> Implementations used for the last collection. */
+    private array $collectedproviders = [];
 
     /**
      * Constructor.
@@ -57,7 +69,10 @@ class data_collector {
         ?provider_factory $providerfactory = null
     ) {
         $this->scopebuilder = $scopebuilder;
-        $this->maxrecords = $maxrecords;
+        if ($maxrecords <= 0) {
+            throw new \coding_exception('Maximum records must be positive');
+        }
+        $this->maxrecords = min($maxrecords, base_provider::HARD_RECORD_LIMIT);
         $this->providerfactory = $providerfactory ?? di::get(provider_factory::class);
     }
 
@@ -70,16 +85,67 @@ class data_collector {
      * @throws \moodle_exception If no data sources are available.
      */
     public function collect(): array {
+        try {
+            return $this->collect_sources();
+        } catch (\Throwable $exception) {
+            if (
+                $exception instanceof \moodle_exception && in_array(
+                    $exception->errorcode,
+                    ['error_no_data', 'error_source_forbidden', 'error_source_failed'],
+                    true
+                )
+            ) {
+                throw $exception;
+            }
+            throw new \moodle_exception(
+                'error_source_failed',
+                'report_ai_analysis',
+                '',
+                null,
+                'Source collection: ' . $exception->getMessage() . "\n" . ($exception->debuginfo ?? '')
+            );
+        }
+    }
+
+    /**
+     * Resolve current source permissions and apply one shared budget during collection.
+     *
+     * @return array Collected provider data.
+     */
+    private function collect_sources(): array {
+        $this->truncated = false;
+        $this->collectedproviders = [];
         $alldata = [];
+        $remaining = $this->maxrecords;
 
         // Get sources to collect from scope.
         $sources = $this->scopebuilder->get_sources_in_scope();
+        $this->scopebuilder->validate_sources();
 
         // Get all available providers.
         $providers = $this->providerfactory->get_all_providers($this->scopebuilder, $this->maxrecords);
 
         if (empty($providers)) {
-            throw new \moodle_exception('error_no_data', 'report_ai_analysis');
+            $error = $sources ? 'error_source_failed' : 'error_no_data';
+            throw new \moodle_exception($error, 'report_ai_analysis');
+        }
+        foreach ($providers as $provider) {
+            $this->collectedproviders[$provider::get_type()] = get_class($provider);
+        }
+        foreach ($sources as $source) {
+            $handled = false;
+            foreach ($providers as $provider) {
+                $handled = $provider->handles_source($source) || $handled;
+            }
+            if (!$handled) {
+                throw new \moodle_exception(
+                    'error_source_failed',
+                    'report_ai_analysis',
+                    '',
+                    null,
+                    'No available provider for selected source ' . $source
+                );
+            }
         }
 
         // Collect from each provider.
@@ -92,18 +158,43 @@ class data_collector {
             }
 
             try {
+                $provider->set_maxrecords($remaining);
                 $data = $provider->collect();
+                $count = $provider::count_records($data);
+                if ($count > $remaining) {
+                    throw new \coding_exception('Provider exceeded its remaining record budget');
+                }
+                $remaining -= $count;
+                $this->truncated = $provider->is_truncated() || $this->truncated;
                 if (!empty($data)) {
                     // Store data with provider type as key.
                     $alldata[$providertype] = $data;
                 }
-            } catch (\Exception $e) {
-                debugging('Provider ' . get_class($provider) . ' failed: ' . s($e->getMessage()), DEBUG_DEVELOPER);
+            } catch (\Throwable $exception) {
+                if ($exception instanceof \moodle_exception && $exception->errorcode === 'error_source_forbidden') {
+                    throw $exception;
+                }
+                throw new \moodle_exception(
+                    'error_source_failed',
+                    'report_ai_analysis',
+                    '',
+                    null,
+                    get_class($provider) . ': ' . $exception->getMessage() . "\n" . ($exception->debuginfo ?? '')
+                );
             }
         }
 
         // Check if any data was collected.
         if (empty($alldata)) {
+            if ($this->truncated) {
+                throw new \moodle_exception(
+                    'error_source_failed',
+                    'report_ai_analysis',
+                    '',
+                    null,
+                    'The source scan safety limit was reached before any in-scope data could be included'
+                );
+            }
             throw new \moodle_exception('error_no_data', 'report_ai_analysis');
         }
 
@@ -111,13 +202,13 @@ class data_collector {
     }
 
     /**
-     * Check if provider should collect based on sources.
+     * Determine whether the provider handles at least one explicitly selected source.
      *
-     * @param \report_ai_analysis\provider\base_provider $provider Provider instance.
-     * @param array $sources Array of source identifiers.
-     * @return bool True if provider should collect.
+     * @param base_provider $provider Source provider.
+     * @param array $sources Selected source identifiers.
+     * @return bool Whether to collect from the provider.
      */
-    private function should_collect_from_provider($provider, array $sources): bool {
+    private function should_collect_from_provider(base_provider $provider, array $sources): bool {
         foreach ($sources as $source) {
             if ($provider->handles_source($source)) {
                 return true;
@@ -137,31 +228,89 @@ class data_collector {
      */
     public function format_for_ai(array $data, ?provider_factory $providerfactory = null): string {
         $output = [];
-
-        // Use injected factory or get from DI.
-        $factory = $providerfactory ?? $this->providerfactory;
-
-        // Get all available providers to access their format methods.
-        $providers = $factory->discover_providers();
-
-        foreach ($data as $providertype => $providerdata) {
-            if (empty($providerdata)) {
-                continue;
+        foreach ($this->get_data_providers($data, $providerfactory) as $type => $providerclass) {
+            try {
+                $formatted = $providerclass::format_for_ai($data[$type]);
+            } catch (\Throwable $exception) {
+                throw new \moodle_exception(
+                    'error_source_failed',
+                    'report_ai_analysis',
+                    '',
+                    null,
+                    $type . ' formatting: ' . $exception->getMessage() . "\n" . ($exception->debuginfo ?? '')
+                );
             }
+            if ($formatted !== '') {
+                $output[] = $formatted;
+            }
+            $this->truncated = $this->truncated || in_array(true, array_column($data[$type], 'truncated'), true);
+        }
 
-            // Find matching provider class.
-            foreach ($providers as $providerclass) {
-                if ($providerclass::get_type() === $providertype) {
-                    $formatted = $providerclass::format_for_ai($providerdata);
-                    if (!empty($formatted)) {
-                        $output[] = $formatted;
-                    }
-                    break;
+        $formatted = implode("\n\n", $output);
+        if (core_text::strlen($formatted) > self::MAX_FORMATTED_LENGTH) {
+            $this->truncated = true;
+            $marker = "\n" . get_string('export_truncated', 'report_ai_analysis');
+            $formatted = core_text::substr($formatted, 0, self::MAX_FORMATTED_LENGTH - core_text::strlen($marker)) . $marker;
+        }
+        return $formatted;
+    }
+
+    /**
+     * Return the last collection/formatting truncation state.
+     *
+     * @return bool Whether the extraction or formatted text is incomplete.
+     */
+    public function is_truncated(): bool {
+        return $this->truncated;
+    }
+
+    /**
+     * Filter already authorised data for one author, preserving provider keys and shapes.
+     *
+     * No names or identities are taken from scope JSON, and no additional source data is fetched.
+     *
+     * @param array $data Collected provider data.
+     * @param int $userid Actual author identifier.
+     * @return array The author's data only.
+     */
+    public function filter_by_user(array $data, int $userid): array {
+        $filtered = [];
+        foreach ($this->get_data_providers($data) as $type => $providerclass) {
+            $userdata = $providerclass::filter_by_user($data[$type], $userid);
+            if ($userdata) {
+                $filtered[$type] = $userdata;
+            }
+        }
+        return $filtered;
+    }
+
+    /**
+     * Format sources separately for every actual author, including represented forum thread roots.
+     *
+     * These strings contain sources only, not the report prompt, other users' posts or other starters' metadata.
+     *
+     * @param array $data Collected provider data.
+     * @return array<int, string> Formatted source data keyed by actual author identifier.
+     */
+    public function get_user_data(array $data): array {
+        $userids = [];
+        foreach ($this->get_data_providers($data) as $type => $providerclass) {
+            foreach ($providerclass::get_user_ids($data[$type]) as $userid) {
+                if ($userid > 0) {
+                    $userids[(int)$userid] = (int)$userid;
                 }
             }
         }
-
-        return implode("\n\n", $output);
+        ksort($userids);
+        $result = [];
+        foreach ($userids as $userid) {
+            $filtered = $this->filter_by_user($data, $userid);
+            $formatted = $this->format_for_ai($filtered);
+            if ($formatted !== '') {
+                $result[$userid] = $formatted;
+            }
+        }
+        return $result;
     }
 
     /**
@@ -178,30 +327,53 @@ class data_collector {
             'total_sources' => 0,
         ];
 
-        // Use injected factory or get from DI.
-        $factory = $providerfactory ?? $this->providerfactory;
-
-        // Get all available providers to access their statistics methods.
-        $providers = $factory->discover_providers();
-
-        foreach ($data as $providertype => $providerdata) {
-            if (empty($providerdata)) {
-                continue;
-            }
-
-            // Find matching provider class.
-            foreach ($providers as $providerclass) {
-                if ($providerclass::get_type() === $providertype) {
-                    $providerstats = $providerclass::get_statistics($providerdata);
-                    if (!empty($providerstats)) {
-                        $stats[$providertype] = $providerstats;
-                        $stats['total_sources']++;
-                    }
-                    break;
-                }
+        foreach ($this->get_data_providers($data, $providerfactory) as $type => $providerclass) {
+            $providerstats = $providerclass::get_statistics($data[$type]);
+            if ($providerstats) {
+                $stats[$type] = $providerstats;
+                $stats['total_sources']++;
             }
         }
 
         return $stats;
+    }
+
+    /**
+     * Resolve every nonempty data source; missing formatters must not silently drop collected content.
+     *
+     * Reuse implementations from collection even if plugin availability subsequently changes. This performs
+     * no further source reads and never treats stored scope metadata as an authority or a class name.
+     *
+     * @param array $data Collected provider data.
+     * @param provider_factory|null $factory Optional alternative factory for compatibility/testing.
+     * @return array<string, class-string<base_provider>> Implementations keyed by provider type.
+     */
+    private function get_data_providers(array $data, ?provider_factory $factory = null): array {
+        if (!$data) {
+            return [];
+        }
+        $providers = $factory ? [] : $this->collectedproviders;
+        if (!$providers) {
+            foreach (($factory ?? $this->providerfactory)->discover_providers() as $classname) {
+                $providers[$classname::get_type()] = $classname;
+            }
+        }
+        $result = [];
+        foreach ($data as $type => $providerdata) {
+            if (!$providerdata) {
+                continue;
+            }
+            if (!isset($providers[$type])) {
+                throw new \moodle_exception(
+                    'error_source_failed',
+                    'report_ai_analysis',
+                    '',
+                    null,
+                    'No implementation for collected source ' . $type
+                );
+            }
+            $result[$type] = $providers[$type];
+        }
+        return $result;
     }
 }

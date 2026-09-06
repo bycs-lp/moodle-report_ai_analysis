@@ -20,104 +20,37 @@ namespace report_ai_analysis;
  * Tests for source_registry class.
  *
  * @package    report_ai_analysis
- * @copyright  2025 ISB Bayern
+ * @copyright  2026 ISB Bayern
  * @author     Dr. Peter Mayer
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- * @covers     \report_ai_analysis\source_registry
  */
+#[\PHPUnit\Framework\Attributes\CoversClass(source_registry::class)]
 final class source_registry_test extends \advanced_testcase {
     /**
-     * Test supported source types.
+     * The registry exposes exactly the enabled source types, their whitelisted plugins and the reverse mapping.
+     *
+     * Blocks and the forum module are supported while AI placements and other activities are not, plugin
+     * whitelisting accepts only the AI chat block and the forum, and each supported plugin maps back to its
+     * source type while unknown types and plugins fail closed.
      */
-    public function test_supported_types(): void {
-        $types = source_registry::get_supported_types();
-
-        $this->assertContains('aiplacement', $types);
-        $this->assertContains('block', $types);
-        $this->assertNotContains('mod_forum', $types); // Not yet enabled.
-        $this->assertNotContains('mod_quiz', $types); // Not yet enabled.
-    }
-
-    /**
-     * Test plugin whitelist validation for AI placements.
-     */
-    public function test_plugin_allowed_aiplacement(): void {
-        $this->assertTrue(source_registry::is_plugin_allowed('aiplacement', 'aiplacement_courseassist'));
-        $this->assertTrue(source_registry::is_plugin_allowed('aiplacement', 'aiplacement_debughelper'));
-        $this->assertTrue(source_registry::is_plugin_allowed('aiplacement', 'tiny_aiplacement_polite'));
-
-        $this->assertFalse(source_registry::is_plugin_allowed('aiplacement', 'block_ai_chat'));
-        $this->assertFalse(source_registry::is_plugin_allowed('aiplacement', 'mod_forum'));
-    }
-
-    /**
-     * Test plugin whitelist validation for blocks.
-     */
-    public function test_plugin_allowed_block(): void {
-        $this->assertTrue(source_registry::is_plugin_allowed('block', 'block_ai_chat'));
-
-        $this->assertFalse(source_registry::is_plugin_allowed('block', 'block_html'));
-        $this->assertFalse(source_registry::is_plugin_allowed('block', 'aiplacement_courseassist'));
-    }
-
-    /**
-     * Test disabled source types.
-     */
-    public function test_disabled_sources(): void {
-        $this->assertFalse(source_registry::is_supported('mod_forum'));
-        $this->assertFalse(source_registry::is_plugin_allowed('mod_forum', 'mod_forum'));
-        $this->assertEmpty(source_registry::get_allowed_plugins('mod_forum'));
-    }
-
-    /**
-     * Test getting all allowed plugins.
-     */
-    public function test_get_all_allowed_plugins(): void {
-        $plugins = source_registry::get_all_allowed_plugins();
-
-        $this->assertContains('aiplacement_courseassist', $plugins);
-        $this->assertContains('block_ai_chat', $plugins);
-        $this->assertCount(5, $plugins); // 4 aiplacements + 1 block.
-    }
-
-    /**
-     * Test finding source type for plugin.
-     */
-    public function test_get_source_type_for_plugin(): void {
-        $this->assertEquals('aiplacement', source_registry::get_source_type_for_plugin('aiplacement_courseassist'));
-        $this->assertEquals('block', source_registry::get_source_type_for_plugin('block_ai_chat'));
-        $this->assertNull(source_registry::get_source_type_for_plugin('mod_forum'));
-        $this->assertNull(source_registry::get_source_type_for_plugin('invalid_plugin'));
-    }
-
-    /**
-     * Test unsupported source type.
-     */
-    public function test_unsupported_source(): void {
+    public function test_supported_types_plugins_and_mapping(): void {
+        // Supported types are exactly the enabled block and forum sources.
+        $this->assertEqualsCanonicalizing(['block', 'mod_forum'], source_registry::get_supported_types());
+        $this->assertTrue(source_registry::is_supported('mod_forum'));
         $this->assertFalse(source_registry::is_supported('invalid_type'));
-        $this->assertEmpty(source_registry::get_allowed_plugins('invalid_type'));
-    }
 
-    /**
-     * Test get allowed plugins for aiplacement.
-     */
-    public function test_get_allowed_plugins_aiplacement(): void {
-        $plugins = source_registry::get_allowed_plugins('aiplacement');
+        // Only the whitelisted plugins are allowed and AI placements never are.
+        $this->assertEqualsCanonicalizing(['block_ai_chat', 'mod_forum'], source_registry::get_all_allowed_plugins());
+        $this->assertSame(['block_ai_chat'], source_registry::get_allowed_plugins('block'));
+        $this->assertTrue(source_registry::is_plugin_allowed('mod_forum', 'mod_forum'));
+        $this->assertFalse(source_registry::is_plugin_allowed('block', 'block_html'));
+        $this->assertFalse(source_registry::is_plugin_allowed('aiplacement', 'aiplacement_courseassist'));
+        $this->assertSame([], source_registry::get_allowed_plugins('invalid_type'));
 
-        $this->assertCount(4, $plugins);
-        $this->assertContains('aiplacement_courseassist', $plugins);
-        $this->assertContains('aiplacement_debughelper', $plugins);
-        $this->assertContains('aiplacement_htmlblock', $plugins);
-        $this->assertContains('tiny_aiplacement_polite', $plugins);
-    }
-
-    /**
-     * Test get allowed plugins for block.
-     */
-    public function test_get_allowed_plugins_block(): void {
-        $plugins = source_registry::get_allowed_plugins('block');
-
-        $this->assertCount(1, $plugins);
-        $this->assertContains('block_ai_chat', $plugins);
+        // Plugins map back to their source type; unknown plugins map to null.
+        $this->assertSame('block', source_registry::get_source_type_for_plugin('block_ai_chat'));
+        $this->assertSame('mod_forum', source_registry::get_source_type_for_plugin('mod_forum'));
+        $this->assertNull(source_registry::get_source_type_for_plugin('aiplacement_courseassist'));
+        $this->assertNull(source_registry::get_source_type_for_plugin('invalid_plugin'));
     }
 }

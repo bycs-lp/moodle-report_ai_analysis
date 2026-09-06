@@ -37,6 +37,7 @@ final class error_info {
      * Error codes with user-facing language strings.
      */
     private const USER_ERROR_CODES = [
+        'error_access_revoked',
         'error_ai_chat_not_available',
         'error_ai_request',
         'error_api_connection_error',
@@ -47,6 +48,9 @@ final class error_info {
         'error_prompt_too_long',
         'error_purposenotconfigured',
         'error_rate_limit',
+        'error_source_failed',
+        'error_source_forbidden',
+        'error_task_changed',
         'error_terms_not_accepted',
         'error_unknown',
     ];

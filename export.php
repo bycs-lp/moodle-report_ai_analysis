@@ -24,12 +24,19 @@
  */
 
 require_once(__DIR__ . '/../../config.php');
+require_once($CFG->libdir . '/filelib.php');
+
+use report_ai_analysis\local\report_access;
+use report_ai_analysis\local\report_exporter;
 
 require_login();
 
 // Get parameters.
 $id = required_param('id', PARAM_INT);
 $format = required_param('format', PARAM_ALPHA);
+if (!in_array($format, ['json', 'html'], true)) {
+    throw new moodle_exception('invalidformat', 'report_ai_analysis');
+}
 
 // Load report.
 global $DB;
@@ -37,251 +44,18 @@ $report = $DB->get_record('report_ai_analysis_reports', ['id' => $id], '*', MUST
 
 // Get context (always course context).
 $context = context::instance_by_id($report->contextid);
-require_login($context->instanceid);
+if ($context->contextlevel !== CONTEXT_COURSE) {
+    throw new moodle_exception('error_contextmismatch', 'report_ai_analysis');
+}
+require_login($context->instanceid, false);
 
 // Check permissions.
-require_capability('report/ai_analysis:view', $context);
+report_access::require_view($report);
+$PAGE->set_context($context);
+$PAGE->set_url('/report/ai_analysis/export.php', ['id' => $id, 'format' => $format]);
 
-// Export based on format.
-switch ($format) {
-    case 'json':
-        export_json($report, $context);
-        break;
-    case 'html':
-        export_html($report, $context);
-        break;
-    default:
-        throw new moodle_exception('invalidformat', 'report_ai_analysis');
-}
-
-/**
- * Export report as JSON.
- *
- * @param stdClass $report The report record
- * @param context $context The context
- * @return void
- */
-function export_json($report, $context) {
-    global $DB, $USER;
-
-    // Get user info with all required fields.
-    $userfields = 'id, firstname, lastname, firstnamephonetic, lastnamephonetic, middlename, alternatename, email';
-    $user = $DB->get_record('user', ['id' => $report->userid], $userfields);
-
-    $errormessage = null;
-    $errordetails = null;
-    if ($report->status === 'failed') {
-        $errormessage = \report_ai_analysis\error_info::get_description($report->error_code ?? null);
-        $errordetails = \report_ai_analysis\error_info::get_debug_details(
-            $report->error_code ?? null,
-            $report->error_message ?? null,
-            $report->error_details ?? null
-        );
-    }
-
-    // Build export data.
-    $exportdata = [
-        'id' => $report->id,
-        'title' => $report->title,
-        'context' => $context->get_context_name(),
-        'scope' => json_decode($report->scope_details, true),
-        'prompt' => $report->prompt,
-        'ai_result' => $report->ai_result,
-        'status' => $report->status,
-        'error_message' => $errormessage,
-        'ai_model' => $report->ai_model_name,
-        'token_usage' => $report->token_usage,
-        'retry_count' => $report->retry_count,
-        'timecreated' => $report->timecreated,
-        'timecompleted' => $report->timecompleted,
-        'created_by' => [
-            'id' => $user->id,
-            'name' => fullname($user),
-            'email' => $user->email,
-        ],
-    ];
-    if ($errordetails !== null) {
-        $exportdata['error_details'] = $errordetails;
-    }
-
-    // Include raw data if user has permission.
-    if (has_capability('report/ai_analysis:viewrawdata', $context) && !empty($report->raw_data)) {
-        $exportdata['raw_data'] = $report->raw_data;
-    }
-
-    // Set headers.
-    $filename = clean_filename($report->title . '_' . date('Y-m-d_H-i-s') . '.json');
-    header('Content-Type: application/json');
-    header('Content-Disposition: attachment; filename="' . $filename . '"');
-    header('Cache-Control: no-cache, must-revalidate');
-
-    // Output JSON.
-    echo json_encode($exportdata, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-    exit;
-}
-
-/**
- * Export report as HTML.
- *
- * @param stdClass $report The report record
- * @param context $context The context
- * @return void
- */
-function export_html($report, $context) {
-    global $DB, $SITE;
-
-    // Get user info with all required fields.
-    $userfields = 'id, firstname, lastname, firstnamephonetic, lastnamephonetic, middlename, alternatename, email';
-    $user = $DB->get_record('user', ['id' => $report->userid], $userfields);
-
-    // Parse scope.
-    $scope = json_decode($report->scope_details, true);
-    $scopeitems = [];
-    if (!empty($scope) && is_array($scope)) {
-        foreach ($scope as $key => $value) {
-            if (is_array($value)) {
-                // Handle nested arrays by converting to strings first.
-                $items = [];
-                foreach ($value as $item) {
-                    if (is_array($item)) {
-                        // For deeply nested arrays, use JSON representation.
-                        $items[] = s(json_encode($item, JSON_UNESCAPED_UNICODE));
-                    } else {
-                        $items[] = s($item);
-                    }
-                }
-                // Construct the content using html_writer consistently.
-                $content = html_writer::tag('strong', s($key) . ':') . ' ' .
-                           html_writer::tag('span', implode(', ', $items));
-                $scopeitems[] = html_writer::tag('li', $content);
-            } else {
-                // Construct the content using html_writer consistently.
-                $content = html_writer::tag('strong', s($key) . ':') . ' ' .
-                           html_writer::tag('span', s($value));
-                $scopeitems[] = html_writer::tag('li', $content);
-            }
-        }
-    }
-    $scopehtml = html_writer::tag('ul', implode('', $scopeitems));
-
-    // Build HTML.
-    $html = '<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>' . s($report->title) . '</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }
-        h1 { color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
-        h2 { color: #555; margin-top: 30px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
-        .meta { background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0; }
-        .meta dt { font-weight: bold; float: left; clear: left; width: 150px; }
-        .meta dd { margin-left: 160px; margin-bottom: 10px; }
-        .content { background-color: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
-        .badge { padding: 5px 10px; border-radius: 3px; font-size: 0.9em; }
-        .badge-success { background-color: #28a745; color: white; }
-        .badge-danger { background-color: #dc3545; color: white; }
-        .badge-warning { background-color: #ffc107; color: black; }
-        .badge-info { background-color: #17a2b8; color: white; }
-        .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 0.9em; color: #666; }
-    </style>
-</head>
-<body>
-    <h1>' . s($report->title) . '</h1>
-
-    <div class="meta">
-        <dl>
-            <dt>Status:</dt>
-            <dd><span class="badge badge-' . get_status_class($report->status) . '">' .
-                s(get_string('status_' . $report->status, 'report_ai_analysis')) . '</span></dd>
-            <dt>Context:</dt>
-            <dd>' . s($context->get_context_name()) . '</dd>
-            <dt>Created by:</dt>
-            <dd>' . s(fullname($user)) . ' (' . s($user->email) . ')</dd>
-            <dt>Created:</dt>
-            <dd>' . userdate($report->timecreated, get_string('strftimedatetimeshort')) . '</dd>';
-
-    if ($report->timecompleted) {
-        $html .= '<dt>Completed:</dt>
-            <dd>' . userdate($report->timecompleted, get_string('strftimedatetimeshort')) . '</dd>';
-    }
-
-    if ($report->ai_model_name) {
-        $html .= '<dt>AI Model:</dt>
-            <dd>' . s($report->ai_model_name) . '</dd>';
-    }
-
-    if ($report->token_usage) {
-        $html .= '<dt>Token Usage:</dt>
-            <dd>' . s($report->token_usage) . '</dd>';
-    }
-
-    $html .= '</dl>
-    </div>
-
-    <h2>Scope</h2>
-    <div class="content">' . $scopehtml . '</div>
-
-    <h2>Prompt</h2>
-    <div class="content">' . nl2br(s($report->prompt)) . '</div>';
-
-    if (!empty($report->ai_result)) {
-        $html .= '<h2>AI Analysis Result</h2>
-        <div class="content">' . format_text($report->ai_result, FORMAT_MARKDOWN) . '</div>';
-    }
-
-    if ($report->status === 'failed') {
-        $html .= '<h2>Error</h2>
-        <div class="content" style="color: #dc3545;">' .
-            s(\report_ai_analysis\error_info::get_description($report->error_code ?? null)) . '</div>';
-
-        $errordetails = \report_ai_analysis\error_info::get_debug_details(
-            $report->error_code ?? null,
-            $report->error_message ?? null,
-            $report->error_details ?? null
-        );
-        if ($errordetails !== null) {
-            $html .= '<h2>' . s(get_string('debuginfo', 'debug')) . '</h2>
-            <pre class="content">' . s($errordetails) . '</pre>';
-        }
-    }
-
-    $html .= '<div class="footer">
-        <p>Exported from: ' . s($SITE->fullname) . ' on ' .
-            userdate(time(), get_string('strftimedatetimeshort')) . '</p>
-    </div>
-
-</body>
-</html>';
-
-    // Set headers.
-    $filename = clean_filename($report->title . '_' . date('Y-m-d_H-i-s') . '.html');
-    header('Content-Type: text/html; charset=UTF-8');
-    header('Content-Disposition: attachment; filename="' . $filename . '"');
-    header('Cache-Control: no-cache, must-revalidate');
-
-    // Output HTML.
-    echo $html;
-    exit;
-}
-
-/**
- * Get CSS class for status badge.
- *
- * @param string $status The status
- * @return string The CSS class
- */
-function get_status_class($status) {
-    switch ($status) {
-        case 'completed':
-            return 'success';
-        case 'failed':
-        case 'cancelled':
-            return 'danger';
-        case 'running':
-            return 'warning';
-        case 'pending':
-        default:
-            return 'info';
-    }
-}
+$exporter = new report_exporter($report, $context);
+$content = $format === 'json' ? $exporter->get_json() : $exporter->get_html($PAGE->get_renderer('report_ai_analysis'));
+$filename = clean_filename($report->title . '_' . date('Y-m-d_H-i-s') . '.' . $format);
+$mimetype = $format === 'json' ? 'application/json' : 'text/html';
+send_file($content, $filename, 0, 0, true, true, $mimetype);

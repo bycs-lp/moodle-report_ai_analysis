@@ -29,10 +29,21 @@ $capabilities = [
 
     // View reports in course.
     'report/ai_analysis:view' => [
+        'riskbitmask' => RISK_PERSONAL,
         'captype' => 'read',
         'contextlevel' => CONTEXT_COURSE,
         'archetypes' => [
             'editingteacher' => CAP_ALLOW,
+            'manager' => CAP_ALLOW,
+        ],
+    ],
+
+    // Extend reading to other owners; the view capability is still required.
+    'report/ai_analysis:viewall' => [
+        'riskbitmask' => RISK_PERSONAL,
+        'captype' => 'read',
+        'contextlevel' => CONTEXT_COURSE,
+        'archetypes' => [
             'manager' => CAP_ALLOW,
         ],
     ],
@@ -50,7 +61,7 @@ $capabilities = [
 
     // Create new analysis reports.
     'report/ai_analysis:create' => [
-        'riskbitmask' => RISK_SPAM,
+        'riskbitmask' => RISK_PERSONAL | RISK_SPAM,
         'captype' => 'write',
         'contextlevel' => CONTEXT_COURSE,
         'archetypes' => [
@@ -72,11 +83,21 @@ $capabilities = [
 
     // Re-run existing analysis.
     'report/ai_analysis:rerun' => [
-        'riskbitmask' => RISK_SPAM,
+        'riskbitmask' => RISK_PERSONAL | RISK_SPAM,
         'captype' => 'write',
         'contextlevel' => CONTEXT_COURSE,
         'archetypes' => [
             'editingteacher' => CAP_ALLOW,
+            'manager' => CAP_ALLOW,
+        ],
+    ],
+
+    // Extend mutations to other owners; each action capability is still required.
+    'report/ai_analysis:manageall' => [
+        'riskbitmask' => RISK_PERSONAL | RISK_DATALOSS,
+        'captype' => 'write',
+        'contextlevel' => CONTEXT_COURSE,
+        'archetypes' => [
             'manager' => CAP_ALLOW,
         ],
     ],

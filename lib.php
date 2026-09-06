@@ -29,7 +29,11 @@
  * @param stdClass $course The course object
  * @param context $context The course context
  */
-function report_ai_analysis_extend_navigation_course($navigation, $course, $context) {
+function report_ai_analysis_extend_navigation_course(
+    navigation_node $navigation,
+    stdClass $course,
+    context $context
+): void {
     if (has_capability('report/ai_analysis:view', $context)) {
         $url = new moodle_url('/report/ai_analysis/index.php', ['courseid' => $course->id]);
         $navigation->add(

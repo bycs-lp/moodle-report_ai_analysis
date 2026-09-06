@@ -27,102 +27,123 @@ class report_ai_analysis_generator extends component_generator_base {
     /**
      * Create a report.
      *
-     * @param array|stdClass $record Report data
+     * @param array|stdClass|null $record Report data, with optional subjects and queue_task fixture controls
      * @return stdClass Created report
      */
-    public function create_report($record = null): stdClass {
+    public function create_report(array|stdClass|null $record = null): stdClass {
         global $DB;
 
-        $record = (object) (array) $record;
-
-        // Set defaults.
-        if (!isset($record->title)) {
-            $record->title = 'Test Report ' . time();
-        }
-        if (!isset($record->prompt)) {
-            $record->prompt = 'Test analysis prompt';
-        }
-        if (!isset($record->status)) {
-            $record->status = 'completed';
-        }
-        if (!isset($record->contextid)) {
-            $courseid = null;
-            if (isset($record->courseid)) {
-                $courseid = $record->courseid;
-            } else if (isset($record->course)) {
-                // Handle Behat-style course reference (shortname).
-                $course = $DB->get_record('course', ['shortname' => $record->course], '*', MUST_EXIST);
-                $courseid = $course->id;
-            } else {
-                throw new coding_exception('Either contextid, courseid, or course must be provided');
-            }
-            $context = context_course::instance($courseid);
-            $record->contextid = $context->id;
-        }
-        if (!isset($record->userid)) {
+        $data = (array) $record;
+        if (!isset($data['userid'])) {
             throw new coding_exception('userid must be provided');
         }
-        if (!isset($record->timecreated)) {
-            $record->timecreated = time();
-        }
-        if (!isset($record->timemodified)) {
-            $record->timemodified = time();
-        }
-
-        // Set completed time if status is completed.
-        if ($record->status === 'completed' && !isset($record->timecompleted)) {
-            $record->timecompleted = time();
+        if (isset($data['contextid'])) {
+            // Explicit contexts are allowed for negative API fixtures, not for production saves.
+            $context = context::instance_by_id((int) $data['contextid']);
+            $courseid = $context->contextlevel === CONTEXT_COURSE ? (int) $context->instanceid : 0;
+        } else {
+            $courseid = $data['courseid'] ?? $DB->get_field('course', 'id', ['shortname' => $data['course'] ?? ''], MUST_EXIST);
+            $data['contextid'] = context_course::instance((int) $courseid)->id;
         }
 
-        // Set default AI result if completed and not set.
-        if ($record->status === 'completed' && !isset($record->ai_result)) {
-            $record->ai_result = 'This is a test AI analysis result for: ' . $record->title;
-        }
-
-        // Set default raw_data if not set.
-        if (!isset($record->raw_data)) {
-            $record->raw_data = json_encode(['test' => 'data', 'conversations' => []]);
-        }
-
-        // Set default scope details if not set.
-        if (!isset($record->scope_details)) {
-            $record->scope_details = json_encode([
+        $now = time();
+        $data += ['title' => 'Test Report ' . ($DB->count_records('report_ai_analysis_reports') + 1), 'status' => 'completed'];
+        $completed = $data['status'] === 'completed';
+        $data += [
+            'prompt' => 'Test analysis prompt',
+            'scope_details' => json_encode([
+                'courseid' => (int) $courseid,
                 'analysis_mode' => 'aggregated',
-                'filters' => [
-                    'sources' => [],
-                    'participants' => [],
-                ],
-            ]);
+                'filters' => new stdClass(),
+            ], JSON_THROW_ON_ERROR),
+            'ai_result' => $completed ? '<p>Test AI result for ' . s($data['title']) . '</p>' : null,
+            'raw_data' => $completed ? 'Test source data' : null,
+            'ai_model_name' => $completed ? 'behat-model' : null,
+            'token_usage' => $completed ? 100 : null,
+            'execution_time' => 0,
+            'retry_count' => 0,
+            'runversion' => 1,
+            'action' => 'create',
+            'resultformat' => FORMAT_HTML,
+            'truncated' => 0,
+            'legacydata' => 0,
+            'timecreated' => $now,
+            'timemodified' => $now,
+            'timecompleted' => $completed ? $now : null,
+        ];
+        $subjects = $data['subjects'] ?? [];
+        $queue = !empty($data['queue_task']);
+        $taskuserid = (int) ($data['taskuserid'] ?? $data['userid']);
+        unset($data['course'], $data['courseid'], $data['subjects'], $data['queue_task'], $data['taskuserid']);
+        $id = $DB->insert_record('report_ai_analysis_reports', (object) $data);
+
+        // Never infer analysed subjects from today's enrolments or from a scope selection.
+        foreach ($subjects as $userid) {
+            $this->create_subject(['reportid' => $id, 'userid' => $userid]);
+        }
+        if ($queue) {
+            $task = new \report_ai_analysis\task\process_analysis_task();
+            $task->set_custom_data((object) ['reportid' => $id, 'runversion' => (int) $data['runversion']]);
+            $task->set_userid($taskuserid);
+            \core\task\manager::queue_adhoc_task($task);
         }
 
-        // Set default AI model name if not set.
-        if (!isset($record->ai_model_name)) {
-            $record->ai_model_name = 'gpt-4-test';
+        return $DB->get_record('report_ai_analysis_reports', ['id' => $id], '*', MUST_EXIST);
+    }
+
+    /**
+     * Create an explicit report/data-subject association, preserving nullable data.
+     *
+     * @param array|stdClass $record Report ID, user ID and optional separately attributable data
+     * @return stdClass Stored association
+     */
+    public function create_subject(array|stdClass $record): stdClass {
+        global $DB;
+
+        $data = (array) $record + ['source_data' => null, 'ai_result' => null];
+        $DB->get_record('report_ai_analysis_reports', ['id' => $data['reportid']], 'id', MUST_EXIST);
+        $DB->get_record('user', ['id' => $data['userid']], 'id', MUST_EXIST);
+        $id = $DB->insert_record('report_ai_analysis_users', (object) $data);
+        return $DB->get_record('report_ai_analysis_users', ['id' => $id], '*', MUST_EXIST);
+    }
+
+    /**
+     * Create a course-owned AI Chat source using the real AI Manager log generator.
+     *
+     * @param array|stdClass $record Course/user IDs, prompttext and optional log fields
+     * @return stdClass Generated log entry
+     */
+    public function create_chat_entry(array|stdClass $record): stdClass {
+        global $DB;
+
+        $data = (array) $record;
+        $context = context_course::instance((int) $data['courseid']);
+        $block = $DB->get_record('block_instances', ['parentcontextid' => $context->id, 'blockname' => 'ai_chat']);
+        if (!$block) {
+            $block = $this->datagenerator->create_block('ai_chat', ['parentcontextid' => $context->id]);
         }
-
-        // Set default token usage if not set.
-        if (!isset($record->token_usage)) {
-            $record->token_usage = 1000;
-        }
-
-        // Set default retry count if not set.
-        if (!isset($record->retry_count)) {
-            $record->retry_count = 0;
-        }
-
-        // Insert record.
-        $record->id = $DB->insert_record('report_ai_analysis_reports', $record);
-
-        return $record;
+        unset($data['courseid']);
+        $data += [
+            'contextid' => context_block::instance($block->id)->id,
+            'coursecontextid' => $context->id,
+            'component' => 'block_ai_chat',
+            'purpose' => 'chat',
+            'itemid' => 0,
+            'promptcompletion' => 'Synthetic chat reply',
+            'requestoptions' => '{}',
+        ];
+        /** @var local_ai_manager_generator $generator */
+        $generator = $this->datagenerator->get_plugin_generator('local_ai_manager');
+        return $generator->create_request_log_entry($data);
     }
 
     /**
      * Create a template.
      *
-     * @param array|stdClass $record Template data
+     * @param array|stdClass|null $record Template data
      * @return stdClass Created template
      */
-    public function create_template($record = null): stdClass {
+    public function create_template(array|stdClass|null $record = null): stdClass {
         global $DB;
 
         $record = (object) (array) $record;
@@ -143,7 +164,7 @@ class report_ai_analysis_generator extends component_generator_base {
         if (!isset($record->sortorder)) {
             // Get highest sortorder and add 1.
             $maxsortorder = $DB->get_field_sql('SELECT MAX(sortorder) FROM {report_ai_analysis_templates}');
-            $record->sortorder = $maxsortorder ? $maxsortorder + 1 : 0;
+            $record->sortorder = $maxsortorder === null ? 0 : (int) $maxsortorder + 1;
         }
         if (!isset($record->enabled)) {
             $record->enabled = 1;

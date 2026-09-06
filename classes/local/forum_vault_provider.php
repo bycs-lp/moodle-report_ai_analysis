@@ -29,7 +29,9 @@
 namespace report_ai_analysis\local;
 
 use mod_forum\local\container as forum_container;
+use mod_forum\local\entities\forum;
 use mod_forum\local\factories\vault as vault_factory;
+use mod_forum\local\managers\capability;
 
 /**
  * Provider class for forum vault access.
@@ -57,7 +59,7 @@ class forum_vault_provider {
      *
      * @return \mod_forum\local\vaults\discussion_list The discussions vault.
      */
-    public function get_discussions_vault() {
+    public function get_discussions_vault(): \mod_forum\local\vaults\discussion_list {
         return $this->get_vault_factory()->get_discussions_in_forum_vault();
     }
 
@@ -66,7 +68,7 @@ class forum_vault_provider {
      *
      * @return \mod_forum\local\vaults\post The post vault.
      */
-    public function get_post_vault() {
+    public function get_post_vault(): \mod_forum\local\vaults\post {
         return $this->get_vault_factory()->get_post_vault();
     }
 
@@ -75,7 +77,7 @@ class forum_vault_provider {
      *
      * @return \mod_forum\local\vaults\forum The forum vault.
      */
-    public function get_forum_vault() {
+    public function get_forum_vault(): \mod_forum\local\vaults\forum {
         return $this->get_vault_factory()->get_forum_vault();
     }
 
@@ -84,7 +86,17 @@ class forum_vault_provider {
      *
      * @return \mod_forum\local\vaults\author The author vault.
      */
-    public function get_author_vault() {
+    public function get_author_vault(): \mod_forum\local\vaults\author {
         return $this->get_vault_factory()->get_author_vault();
+    }
+
+    /**
+     * Get the capability manager implementing the forum's current visibility rules.
+     *
+     * @param forum $forum Forum entity being read.
+     * @return capability Forum capability manager.
+     */
+    public function get_capability_manager(forum $forum): capability {
+        return forum_container::get_manager_factory()->get_capability_manager($forum);
     }
 }

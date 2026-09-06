@@ -21,67 +21,46 @@ Feature: Re-run AI Analysis Reports
       | Cancelled Report   | C1     | teacher1 | cancelled | Cancelled analysis        |              |                                |                            |
       | Pending Report     | C1     | teacher1 | pending   | Pending analysis          |              |                                |                            |
       | Running Report     | C1     | teacher1 | running   | Currently running         |              |                                |                            |
+    And the AI analysis backend is configured
 
-  Scenario: Re-run link is visible for completed reports
-    Given I am on the "Course 1" "Course" page logged in as "teacher1"
-    When I navigate to "Reports > AI Conversation Analysis" in current page administration
+  Scenario: Re-run resets a terminal report and deletion removes queued work
+    Given the following "report_ai_analysis > reports" exist:
+      | title            | course | user     | status  | prompt    | queue_task |
+      | Report to Delete | C1     | teacher1 | pending | Remove me | 1          |
+    And I am on the "Course 1" "Course" page logged in as "teacher1"
+    And I navigate to "Reports > AI Conversation Analysis" in current page administration
     Then I should see "Re-run" in the "Completed Report" "table_row"
-
-  Scenario: Re-run link is visible for failed reports
-    Given I am on the "Course 1" "Course" page logged in as "teacher1"
-    When I navigate to "Reports > AI Conversation Analysis" in current page administration
-    Then I should see "Re-run" in the "Failed Report" "table_row"
-
-  Scenario: Re-run link is visible for cancelled reports
-    Given I am on the "Course 1" "Course" page logged in as "teacher1"
-    When I navigate to "Reports > AI Conversation Analysis" in current page administration
-    Then I should see "Re-run" in the "Cancelled Report" "table_row"
-
-  Scenario: Re-run link is not visible for pending reports
-    Given I am on the "Course 1" "Course" page logged in as "teacher1"
-    When I navigate to "Reports > AI Conversation Analysis" in current page administration
-    Then I should not see "Re-run" in the "Pending Report" "table_row"
-
-  Scenario: Re-run link is not visible for running reports
-    Given I am on the "Course 1" "Course" page logged in as "teacher1"
-    When I navigate to "Reports > AI Conversation Analysis" in current page administration
-    Then I should not see "Re-run" in the "Running Report" "table_row"
-
-  Scenario: Re-run shows confirmation page
-    Given I am on the "Course 1" "Course" page logged in as "teacher1"
-    And I navigate to "Reports > AI Conversation Analysis" in current page administration
-    When I click on "Re-run" "link" in the "Completed Report" "table_row"
+    And I should see "Re-run" in the "Failed Report" "table_row"
+    And I should see "Re-run" in the "Cancelled Report" "table_row"
+    And I should not see "Re-run" in the "Pending Report" "table_row"
+    And I should not see "Re-run" in the "Running Report" "table_row"
+    And I remember AI analysis report "Failed Report"
+    When I click on "Re-run" "link" in the "Failed Report" "table_row"
     Then I should see "Are you sure you want to re-run"
-    And I should see "Completed Report"
-
-  Scenario: Can confirm re-running a report
-    Given I am on the "Course 1" "Course" page logged in as "teacher1"
-    And I navigate to "Reports > AI Conversation Analysis" in current page administration
-    And I click on "Re-run" "link" in the "Completed Report" "table_row"
-    When I press "Continue"
-    Then I should see "queued"
-    And I should see "Pending"
-
-  Scenario: Re-running resets report status
-    Given I am on the "Course 1" "Course" page logged in as "teacher1"
-    And I navigate to "Reports > AI Conversation Analysis" in current page administration
-    And I click on "Re-run" "link" in the "Failed Report" "table_row"
+    And I should see "Failed Report"
     When I press "Continue"
     Then I should see "Pending"
     And the report "Failed Report" should have no stored error data
+    And AI analysis report "Failed Report" should have a fresh generation
+    And AI analysis report "Failed Report" should have "1" queued tasks
+    And an adhoc task "report_ai_analysis\task\process_analysis_task" should exist for user "teacher1"
+    And I remember AI analysis report "Report to Delete"
+    And AI analysis report "Report to Delete" should have "1" queued tasks
+    When I click on "Delete" "link" in the "Report to Delete" "table_row"
+    And I press "Continue"
+    Then I should see "Report deleted successfully"
+    And I should not see "Report to Delete"
+    And AI analysis report "Report to Delete" should have "0" queued tasks
 
-  Scenario: Re-running queues adhoc task
+  Scenario: Direct re-run enforces session key, report state and the rerun capability
     Given I am on the "Course 1" "Course" page logged in as "teacher1"
-    And I navigate to "Reports > AI Conversation Analysis" in current page administration
-    And I click on "Re-run" "link" in the "Completed Report" "table_row"
-    When I click on "Continue" "button"
-    Then an adhoc task "report_ai_analysis\task\process_analysis_task" should exist for user "teacher1"
-
-  Scenario: Teacher without rerun capability cannot re-run
+    Then a direct "rerun" request for AI analysis report "Completed Report" with an invalid sesskey should be denied
+    And AI analysis report "Pending Report" should reject direct "rerun"
+    And AI analysis report "Running Report" should reject direct "rerun"
+    And AI analysis report "Running Report" should reject direct "edit"
     Given the following "permission overrides" exist:
-      | capability                     | permission | role           | contextlevel | reference |
-      | report/ai_analysis:rerun       | Prohibit   | editingteacher | Course       | C1        |
-    And I am on the "Course 1" "Course" page logged in as "teacher1"
+      | capability               | permission | role           | contextlevel | reference |
+      | report/ai_analysis:rerun | Prohibit   | editingteacher | Course       | C1        |
     When I navigate to "Reports > AI Conversation Analysis" in current page administration
     Then I should not see "Re-run" in the "Completed Report" "table_row"
     And a direct rerun request for AI analysis report "Completed Report" should be rejected

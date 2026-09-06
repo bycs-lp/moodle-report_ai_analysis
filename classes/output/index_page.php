@@ -39,7 +39,7 @@ use report_ai_analysis\table\reports_table;
  */
 class index_page implements renderable, templatable {
     /** @var int The course ID */
-    private $courseid;
+    private int $courseid;
 
     /**
      * Constructor.
@@ -56,7 +56,7 @@ class index_page implements renderable, templatable {
      * @param renderer_base $output Renderer
      * @return \stdClass Template data
      */
-    public function export_for_template(renderer_base $output) {
+    public function export_for_template(renderer_base $output): \stdClass {
         global $DB;
 
         $data = new \stdClass();
@@ -64,11 +64,18 @@ class index_page implements renderable, templatable {
 
         // Course information.
         $course = $DB->get_record('course', ['id' => $this->courseid], 'fullname', MUST_EXIST);
-        $data->coursename = format_string($course->fullname);
+        $data->coursename = html_to_text(format_string($course->fullname, true, ['context' => $context]), 0, false);
         $data->courseid = $this->courseid;
 
         // Check if user can create new analyses.
         $data->cancreate = has_capability('report/ai_analysis:create', $context);
+        $data->createdisabled = false;
+        if ($data->cancreate) {
+            $availability = \core\di::get(ai_availability::class)->get_availability($context);
+            $data->cancreate = $availability['state'] !== 'hidden';
+            $data->createdisabled = $availability['state'] === 'disabled';
+            $data->availabilitymessage = $availability['message'];
+        }
 
         // Create URL for new analysis.
         if ($data->cancreate) {
@@ -77,7 +84,7 @@ class index_page implements renderable, templatable {
         }
 
         // Render reports table.
-        $baseurl = new \moodle_url('/report/ai_analysis/index.php', ['id' => $this->courseid]);
+        $baseurl = new \moodle_url('/report/ai_analysis/index.php', ['courseid' => $this->courseid]);
 
         $table = new reports_table($context, $baseurl);
         ob_start();

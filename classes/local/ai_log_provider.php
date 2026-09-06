@@ -26,7 +26,7 @@ use local_ai_manager\local\connector_factory;
  * in unit tests without requiring actual database log entries.
  *
  * @package    report_ai_analysis
- * @copyright  2025 ISB Bayern
+ * @copyright  2026 ISB Bayern
  * @author     Dr. Peter Mayer
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
@@ -41,9 +41,10 @@ class ai_log_provider {
      * @param int $contextid The context ID.
      * @param int $userid The user ID.
      * @param int $itemid Optional item ID filter.
-     * @param bool $desc Whether to sort descending.
+     * @param bool $includedeleted Whether to include log entries marked as deleted.
      * @param string $fields Fields to retrieve.
      * @param array $purposes Array of purpose strings to filter by.
+     * @param int $limit Maximum request entries; zero retains the upstream unlimited API for existing callers.
      * @return array Array of log entry records.
      */
     public function get_log_entries(
@@ -51,18 +52,20 @@ class ai_log_provider {
         int $contextid,
         int $userid,
         int $itemid = 0,
-        bool $desc = false,
+        bool $includedeleted = false,
         string $fields = '*',
-        array $purposes = []
+        array $purposes = [],
+        int $limit = 0
     ): array {
         return ai_manager_utils::get_log_entries(
             $component,
             $contextid,
             $userid,
             $itemid,
-            $desc,
+            $includedeleted,
             $fields,
-            $purposes
+            $purposes,
+            $limit
         );
     }
 

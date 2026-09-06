@@ -18,23 +18,15 @@ Feature: Basic navigation and access to AI Analysis Report
       | teacher1 | C1     | editingteacher |
       | student1 | C1     | student        |
       | manager1 | C1     | manager        |
+    And the AI analysis backend is configured
 
-  Scenario: Teacher can see AI Analysis Report link in course navigation
-    Given I am on the "Course 1" "Course" page logged in as "teacher1"
-    When I navigate to "Reports" in current page administration
-    Then I should see "AI Conversation Analysis"
-
-  Scenario: Manager can see AI Analysis Report link in course navigation
-    Given I am on the "Course 1" "Course" page logged in as "manager1"
-    When I navigate to "Reports" in current page administration
-    Then I should see "AI Conversation Analysis"
-
-  Scenario: Student cannot see AI Analysis Report link in course navigation
-    Given I am on the "Course 1" "Course" page logged in as "student1"
-    Then "Reports" "link" should not exist in current page administration
-
-  Scenario: Teacher can access the AI Analysis Report index page
+  Scenario: Course navigation exposes the report only to privileged roles
     Given I am on the "Course 1" "Course" page logged in as "teacher1"
     When I navigate to "Reports > AI Conversation Analysis" in current page administration
     Then I should see "AI Conversation Analysis"
     And I should see "New analysis"
+    Given I am on the "Course 1" "Course" page logged in as "manager1"
+    When I navigate to "Reports" in current page administration
+    Then I should see "AI Conversation Analysis"
+    Given I am on the "Course 1" "Course" page logged in as "student1"
+    Then "Reports" "link" should not exist in current page administration

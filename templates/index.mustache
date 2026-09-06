@@ -23,6 +23,8 @@
     * coursename - Name of the course
     * courseid - ID of the course
     * cancreate - Whether user can create new analyses
+    * createdisabled - Whether AI is temporarily unavailable
+    * availabilitymessage - Sanitized explanation for disabled AI
     * createurl - URL to create new analysis
     * tablecontent - HTML content of reports table
 
@@ -31,7 +33,7 @@
         "coursename": "Introduction to AI",
         "courseid": 42,
         "cancreate": true,
-        "createurl": "/report/ai_analysis/create.php?id=42",
+        "createurl": "/report/ai_analysis/create.php?courseid=42",
         "tablecontent": "<table class='generaltable'><thead><tr><th>Title</th><th>Status</th></tr></thead><tbody><tr><td>Report 1</td><td>Completed</td></tr></tbody></table>"
     }
 }}
@@ -40,9 +42,15 @@
     <div class="mb-3">
         <h2>{{#str}}coursename, report_ai_analysis{{/str}}: {{coursename}}</h2>
         {{#cancreate}}
-        <a href="{{{createurl}}}" class="btn btn-primary">
+        {{^createdisabled}}
+        <a href="{{createurl}}" class="btn btn-primary">
             {{#str}}newanalysis, report_ai_analysis{{/str}}
         </a>
+        {{/createdisabled}}
+        {{#createdisabled}}
+        <button type="button" class="btn btn-primary" disabled>{{#str}}newanalysis, report_ai_analysis{{/str}}</button>
+        <div class="alert alert-warning mt-2">{{{availabilitymessage}}}</div>
+        {{/createdisabled}}
         {{/cancreate}}
     </div>
 

@@ -26,10 +26,12 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'report_ai_analysis';
-$plugin->version = 2026090400;
-$plugin->requires = 2023100900; // Moodle 4.3.
+$plugin->version = 2026090600;
+$plugin->requires = 2025041400; // Moodle 5.0.
+$plugin->supported = [500, 502];
 $plugin->maturity = MATURITY_ALPHA;
 $plugin->release = 'v1.0.0';
 $plugin->dependencies = [
-    'local_ai_manager' => 2024010100,
+    // Verified public request, log, availability and data_wiper contract; earlier releases are not verified.
+    'local_ai_manager' => 2026102300,
 ];

@@ -1,0 +1,104 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle. If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template report_ai_analysis/export
+
+    Standalone, localized report export. Prompt and airesult must be cleaned HTML;
+    all remaining report fields are escaped here. No JavaScript is required.
+
+    Example context (json):
+    {
+        "language": "en",
+        "title": "Analysis",
+        "statustext": "Completed",
+        "contextname": "Example course",
+        "creator": "Example User",
+        "timecreated": "6 September 2026",
+        "scopeitems": [{"label": "Data sources", "value": "1"}],
+        "prompt": "<p>Analyze the discussion.</p>",
+        "haveresult": true,
+        "airesult": "<p>Result.</p>",
+        "aimodel": "Example model",
+        "duration": "2 seconds",
+        "tokenusage": "100",
+        "retries": "0",
+        "timecompleted": "6 September 2026",
+        "sitename": "Example site",
+        "exportedat": "6 September 2026"
+    }
+}}
+<!DOCTYPE html>
+<html lang="{{language}}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{title}}</title>
+    <style>
+        body { font-family: sans-serif; line-height: 1.6; margin: 2rem auto; max-width: 70rem; padding: 0 1rem; }
+        dt { font-weight: bold; }
+        dd { margin-bottom: .5rem; }
+        pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+        .warning { border-left: .25rem solid #ad6800; padding: 1rem; background: #fff8e1; }
+        footer { border-top: 1px solid #ccc; margin-top: 2rem; padding-top: 1rem; }
+    </style>
+</head>
+<body>
+<main>
+    <h1>{{title}}</h1>
+    <dl>
+        <dt>{{#str}}status, report_ai_analysis{{/str}}</dt><dd>{{statustext}}</dd>
+        <dt>{{#str}}coursename, report_ai_analysis{{/str}}</dt><dd>{{contextname}}</dd>
+        <dt>{{#str}}report_creator, report_ai_analysis{{/str}}</dt><dd>{{creator}}</dd>
+        <dt>{{#str}}created, report_ai_analysis{{/str}}</dt><dd>{{timecreated}}</dd>
+        <dt>{{#str}}timecompleted, report_ai_analysis{{/str}}</dt><dd>{{timecompleted}}</dd>
+        <dt>{{#str}}aimodel, report_ai_analysis{{/str}}</dt><dd>{{aimodel}}</dd>
+        <dt>{{#str}}duration, report_ai_analysis{{/str}}</dt><dd>{{duration}}</dd>
+        <dt>{{#str}}tokenusage, report_ai_analysis{{/str}}</dt><dd>{{tokenusage}}</dd>
+        <dt>{{#str}}retries, report_ai_analysis{{/str}}</dt><dd>{{retries}}</dd>
+    </dl>
+    <h2>{{#str}}scope, report_ai_analysis{{/str}}</h2>
+    <ul class="report-ai-analysis-scope">
+        {{#scopeitems}}<li><strong>{{label}}</strong>: {{value}}</li>{{/scopeitems}}
+        {{^scopeitems}}<li>-</li>{{/scopeitems}}
+    </ul>
+    {{#truncated}}<p class="warning">{{#str}}analysis_truncated, report_ai_analysis{{/str}}</p>{{/truncated}}
+    <h2>{{#str}}prompt, report_ai_analysis{{/str}}</h2>
+    <div class="prompt-text">{{{prompt}}}</div>
+    {{#haveresult}}
+    <h2>{{#str}}analysis_result, report_ai_analysis{{/str}}</h2>
+    <div class="warning">{{> local_ai_manager/ai_info_warning }}</div>
+    <div class="ai-result">{{{airesult}}}</div>
+    {{/haveresult}}
+    {{#haserror}}
+    <h2>{{#str}}error, moodle{{/str}}</h2>
+    <p>{{errormessage}}</p>
+    {{#haserrordetails}}
+    <h3>{{#str}}debuginfo, debug{{/str}}</h3>
+    <pre>{{errordetails}}</pre>
+    {{/haserrordetails}}
+    {{/haserror}}
+    {{#canviewrawdata}}
+    <h2>{{#str}}raw_data, report_ai_analysis{{/str}}</h2>
+    <pre class="raw-data">{{rawdata}}</pre>
+    {{/canviewrawdata}}
+</main>
+<footer>
+    <p>{{#str}}exportedfrom, report_ai_analysis{{/str}}: {{sitename}}</p>
+    <p>{{#str}}exportedat, report_ai_analysis{{/str}}: {{exportedat}}</p>
+</footer>
+</body>
+</html>

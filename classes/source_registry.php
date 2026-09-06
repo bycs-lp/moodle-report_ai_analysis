@@ -48,17 +48,6 @@ class source_registry {
      * ]
      */
     private const SUPPORTED_SOURCES = [
-        // AI Placement Plugins (current implementation).
-        'aiplacement' => [
-            'plugins' => [
-                'aiplacement_courseassist',
-                'aiplacement_debughelper',
-                'aiplacement_htmlblock',
-                'tiny_aiplacement_polite',
-            ],
-            'requires_context' => true,
-        ],
-
         // Block Plugins (AI Chat).
         'block' => [
             'plugins' => [
@@ -70,23 +59,9 @@ class source_registry {
 
         // Forum discussions and posts.
         'mod_forum' => [
-            'enabled' => false,
+            'plugins' => ['mod_forum'],
             'table' => 'forum_discussions',
-            'requires_context' => false,
-        ],
-
-        // Future: Quiz attempts.
-        'mod_quiz' => [
-            'enabled' => false,
-            'table' => 'quiz_attempts',
-            'requires_context' => false,
-        ],
-
-        // Future: Assignment submissions.
-        'mod_assign' => [
-            'enabled' => false,
-            'table' => 'assign_submission',
-            'requires_context' => false,
+            'requires_context' => true,
         ],
     ];
 

@@ -29,6 +29,9 @@ use table_sql;
 use moodle_url;
 use html_writer;
 use report_ai_analysis\error_info;
+use report_ai_analysis\local\report_access;
+use report_ai_analysis\local\report_exporter;
+use report_ai_analysis\output\ai_availability;
 use report_ai_analysis\scope_builder;
 
 defined('MOODLE_INTERNAL') || die();
@@ -44,7 +47,10 @@ require_once($CFG->libdir . '/tablelib.php');
  */
 class reports_table extends table_sql {
     /** @var \context The context */
-    private $context;
+    private \context $context;
+
+    /** @var array|null Availability shared by all action cells in this table. */
+    private ?array $availability = null;
 
     /**
      * Constructor.
@@ -53,6 +59,9 @@ class reports_table extends table_sql {
      * @param \moodle_url $baseurl Base URL for the table
      */
     public function __construct(\context $context, \moodle_url $baseurl) {
+        if ($context->contextlevel !== CONTEXT_COURSE) {
+            throw new \moodle_exception('error_contextmismatch', 'report_ai_analysis');
+        }
         parent::__construct('report_ai_analysis_reports_table');
 
         $this->context = $context;
@@ -94,7 +103,7 @@ class reports_table extends table_sql {
     /**
      * Setup SQL query for the table.
      */
-    private function setup_sql() {
+    private function setup_sql(): void {
         global $USER;
 
         // Join with user table to avoid N+1 queries.
@@ -103,15 +112,18 @@ class reports_table extends table_sql {
             'r.error_message, r.error_details, r.error_code, ' . $userfields;
         $from = '{report_ai_analysis_reports} r LEFT JOIN {user} u ON r.userid = u.id';
 
-        // Build WHERE clause based on context and permissions.
-        $where = '1=1';
-        $params = [];
-
-        // Filter by context (always course).
-        $where .= ' AND r.contextid = :contextid';
-        $params['contextid'] = $this->context->id;
-
-        // All users with 'view' capability can see all reports in the course.
+        // Filter in SQL so counts and pagination cannot reveal foreign private reports.
+        $where = 'r.contextid = :contextid';
+        $params = ['contextid' => $this->context->id];
+        if (!has_capability('report/ai_analysis:view', $this->context)) {
+            $where .= ' AND 1 = 0';
+        } else if (
+            !has_capability('report/ai_analysis:viewall', $this->context) &&
+            !get_config('report_ai_analysis', 'share_reports_in_course')
+        ) {
+            $where .= ' AND r.userid = :userid';
+            $params['userid'] = $USER->id;
+        }
 
         $this->set_sql($fields, $from, $where, $params);
         $this->set_count_sql("SELECT COUNT(r.id) FROM {$from} WHERE {$where}", $params);
@@ -142,9 +154,6 @@ class reports_table extends table_sql {
         $scope = scope_builder::parse($row->scope_details);
         $parts = [];
 
-        if (isset($scope->filters->courses)) {
-            $parts[] = get_string('courses', 'report_ai_analysis') . ': ' . count($scope->filters->courses);
-        }
         if (isset($scope->filters->sources)) {
             $parts[] = get_string('sources', 'report_ai_analysis') . ': ' . count($scope->filters->sources);
         }
@@ -155,6 +164,9 @@ class reports_table extends table_sql {
         } else if (isset($scope->filters->students)) {
             // Legacy support for old "students" field.
             $parts[] = get_string('participants', 'report_ai_analysis') . ': ' . count($scope->filters->students);
+        }
+        if (!empty($scope->filters->roles)) {
+            $parts[] = get_string('roles', 'report_ai_analysis') . ': ' . count($scope->filters->roles);
         }
 
         return !empty($parts) ? implode(', ', $parts) : '-';
@@ -178,7 +190,7 @@ class reports_table extends table_sql {
      */
     protected function col_userid(\stdClass $row): string {
         // User data is already joined in SQL query.
-        return \fullname($row);
+        return s(fullname($row));
     }
 
     /**
@@ -239,16 +251,17 @@ class reports_table extends table_sql {
      * @return string Action links
      */
     protected function col_actions(\stdClass $row): string {
-        global $OUTPUT;
-
+        if (!report_access::can_view($row)) {
+            return '';
+        }
         $actions = [];
 
         // View action.
         $viewurl = new moodle_url('/report/ai_analysis/view.php', ['id' => $row->id]);
         $actions[] = html_writer::link($viewurl, get_string('view', 'report_ai_analysis'));
 
-        // Export action (if completed).
-        if ($row->status === 'completed') {
+        // Failed reports deliberately support exports with safe error descriptions.
+        if (report_exporter::can_export($row)) {
             $exporturl = new moodle_url('/report/ai_analysis/export.php', [
                 'id' => $row->id,
                 'format' => 'json',
@@ -256,31 +269,52 @@ class reports_table extends table_sql {
             $actions[] = html_writer::link($exporturl, get_string('export', 'report_ai_analysis'));
         }
 
+        $canrerun = report_access::can_manage($row, 'report/ai_analysis:rerun') &&
+            in_array($row->status, ['completed', 'failed', 'cancelled'], true);
+        $canedit = report_access::can_manage($row, 'report/ai_analysis:create') && $row->status !== 'running';
+        if (($canrerun || $canedit) && $this->availability === null) {
+            $this->availability = \core\di::get(ai_availability::class)->get_availability($this->context);
+        }
+        $aistate = $this->availability['state'] ?? 'hidden';
+
         // Re-run action (if completed, failed, or cancelled and user has permission).
         $reportcontext = \context::instance_by_id($row->contextid);
-        if (
-            has_capability('report/ai_analysis:rerun', $reportcontext) &&
-            in_array($row->status, ['completed', 'failed', 'cancelled'])
-        ) {
+        if ($canrerun && $aistate !== 'hidden') {
             $rerunurl = new moodle_url('/report/ai_analysis/rerun.php', [
                 'id' => $row->id,
                 'sesskey' => sesskey(),
             ]);
-            $actions[] = html_writer::link($rerunurl, get_string('rerun', 'report_ai_analysis'));
+            $actions[] = $aistate === 'available'
+                ? html_writer::link($rerunurl, get_string('rerun', 'report_ai_analysis'))
+                : html_writer::tag('button', get_string('rerun', 'report_ai_analysis'), [
+                    'type' => 'button',
+                    'disabled' => 'disabled',
+                    'title' => get_string('aiunavailable', 'report_ai_analysis'),
+                ]);
         }
 
         // Edit action (if user has permission and report is not running).
-        if (has_capability('report/ai_analysis:create', $reportcontext) && !in_array($row->status, ['running'])) {
-            $editurl = new moodle_url('/report/ai_analysis/create.php', ['reportid' => $row->id]);
-            $actions[] = html_writer::link($editurl, get_string('edit', 'report_ai_analysis'));
+        if ($canedit && $aistate !== 'hidden') {
+            $editurl = new moodle_url('/report/ai_analysis/create.php', [
+                'reportid' => $row->id,
+                'courseid' => $reportcontext->instanceid,
+            ]);
+            $actions[] = $aistate === 'available'
+                ? html_writer::link($editurl, get_string('edit', 'report_ai_analysis'))
+                : html_writer::tag('button', get_string('edit', 'report_ai_analysis'), [
+                    'type' => 'button',
+                    'disabled' => 'disabled',
+                    'title' => get_string('aiunavailable', 'report_ai_analysis'),
+                ]);
         }
 
         // Delete action (if user has permission).
-        if (has_capability('report/ai_analysis:delete', $reportcontext)) {
+        $candelete = report_access::can_manage($row, 'report/ai_analysis:delete');
+        if ($candelete) {
             $deleteurl = new moodle_url('/report/ai_analysis/index.php', [
                 'action' => 'delete',
                 'reportid' => $row->id,
-                'id' => $reportcontext->instanceid,
+                'courseid' => $reportcontext->instanceid,
             ]);
             $actions[] = html_writer::link($deleteurl, get_string('delete', 'report_ai_analysis'), [
                 'class' => 'text-danger',
@@ -288,15 +322,16 @@ class reports_table extends table_sql {
         }
 
         // Cancel action (if status is pending or running).
-        if (in_array($row->status, ['pending', 'running']) && has_capability('report/ai_analysis:delete', $reportcontext)) {
+        if (in_array($row->status, ['pending', 'running'], true) && $candelete) {
             $cancelurl = new moodle_url('/report/ai_analysis/index.php', [
                 'action' => 'cancel',
                 'reportid' => $row->id,
                 'sesskey' => sesskey(),
-                'id' => $reportcontext->instanceid,
+                'courseid' => $reportcontext->instanceid,
             ]);
             $actions[] = html_writer::link($cancelurl, get_string('cancel', 'report_ai_analysis'), [
                 'class' => 'text-warning',
+                'title' => get_string('cancelwarning', 'report_ai_analysis'),
             ]);
         }
 

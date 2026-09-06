@@ -35,24 +35,7 @@ function xmldb_report_ai_analysis_upgrade($oldversion) {
     $dbman = $DB->get_manager();
 
     if ($oldversion < 2025102302) {
-        // Reset role capabilities for updated capabilities.
-        $capabilities = [
-            'report/ai_analysis:viewcourse',
-            'report/ai_analysis:viewactivity',
-        ];
-
-        foreach ($capabilities as $capability) {
-            // Get the capability ID.
-            $capid = $DB->get_field('capabilities', 'id', ['name' => $capability]);
-            if ($capid) {
-                // Reset to defaults by removing all overrides.
-                $DB->delete_records('role_capabilities', ['capability' => $capability]);
-            }
-        }
-
-        // Trigger update of default capabilities.
-        update_capabilities('report_ai_analysis');
-
+        // Preserve administrator capability overrides. Core updates capability definitions during upgrade.
         upgrade_plugin_savepoint(true, 2025102302, 'report', 'ai_analysis');
     }
 
@@ -102,6 +85,51 @@ function xmldb_report_ai_analysis_upgrade($oldversion) {
         );
 
         upgrade_plugin_savepoint(true, 2026090400, 'report', 'ai_analysis');
+    }
+
+    if ($oldversion < 2026090600) {
+        $table = new xmldb_table('report_ai_analysis_reports');
+        $fields = [
+            new xmldb_field('runversion', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'status'),
+            new xmldb_field('action', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, 'create', 'runversion'),
+            new xmldb_field('resultformat', XMLDB_TYPE_INTEGER, '2', null, XMLDB_NOTNULL, null, '4', 'action'),
+            new xmldb_field('truncated', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'resultformat'),
+            new xmldb_field('legacydata', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'truncated'),
+        ];
+        foreach ($fields as $field) {
+            if (!$dbman->field_exists($table, $field)) {
+                $dbman->add_field($table, $field);
+            }
+        }
+
+        $table = new xmldb_table('report_ai_analysis_users');
+        $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE);
+        $table->add_field('reportid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL);
+        $table->add_field('userid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL);
+        $table->add_field('source_data', XMLDB_TYPE_TEXT);
+        $table->add_field('ai_result', XMLDB_TYPE_TEXT);
+        $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+        $table->add_key('reportid', XMLDB_KEY_FOREIGN, ['reportid'], 'report_ai_analysis_reports', ['id']);
+        $table->add_key('userid', XMLDB_KEY_FOREIGN, ['userid'], 'user', ['id']);
+        $table->add_key('reportid-userid', XMLDB_KEY_UNIQUE, ['reportid', 'userid']);
+        if (!$dbman->table_exists($table)) {
+            $dbman->create_table($table);
+        }
+
+        // Keep legacy content and incomplete attribution explicit; do not guess a result format or reset permissions.
+        $lastid = 0;
+        do {
+            upgrade_set_timeout(300);
+            $lastid = \report_ai_analysis\local\upgrade::migrate_legacy_reports($lastid);
+        } while ($lastid !== 0);
+
+        $lastid = 0;
+        do {
+            upgrade_set_timeout(300);
+            $lastid = \report_ai_analysis\local\upgrade::remove_legacy_tasks($lastid);
+        } while ($lastid !== 0);
+
+        upgrade_plugin_savepoint(true, 2026090600, 'report', 'ai_analysis');
     }
 
     return true;

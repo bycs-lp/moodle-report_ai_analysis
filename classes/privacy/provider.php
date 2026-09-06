@@ -18,28 +18,33 @@
  * Privacy provider implementation for report_ai_analysis.
  *
  * @package    report_ai_analysis
- * @copyright  2025 ISB Bayern
+ * @copyright  2026 ISB Bayern
  * @author     Dr. Peter Mayer
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 namespace report_ai_analysis\privacy;
 
+use context;
 use core_privacy\local\metadata\collection;
 use core_privacy\local\request\approved_contextlist;
 use core_privacy\local\request\approved_userlist;
 use core_privacy\local\request\contextlist;
+use core_privacy\local\request\transform;
 use core_privacy\local\request\userlist;
 use core_privacy\local\request\writer;
 use report_ai_analysis\error_info;
+use report_ai_analysis\local\log_store;
+use report_ai_analysis\local\report_manager;
 
 /**
  * Privacy provider for report_ai_analysis.
  *
- * This plugin stores AI analysis reports created by users, including
- * prompts and potentially personal conversation data.
+ * Both report creators and the people whose contributions were included are
+ * data subjects. Legacy reports use the conservative mappings saved by the
+ * upgrade, not today's enrolments or a new interpretation of the report filters.
  *
- * @copyright  2025 ISB Bayern
+ * @copyright  2026 ISB Bayern
  * @author     Dr. Peter Mayer
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
@@ -48,8 +53,7 @@ class provider implements
     \core_privacy\local\request\core_userlist_provider,
     \core_privacy\local\request\plugin\provider {
     /**
-     * Get the language string identifier with the component's language
-     * file to explain why this plugin stores no data.
+     * Describe stored data and processing through the AI manager and AI service.
      *
      * @param collection $collection The initialised collection to add items to.
      * @return collection A listing of user data stored through this system.
@@ -58,17 +62,65 @@ class provider implements
         $collection->add_database_table(
             'report_ai_analysis_reports',
             [
+                'contextid' => 'privacy:metadata:report_ai_analysis_reports:contextid',
                 'userid' => 'privacy:metadata:report_ai_analysis_reports:userid',
                 'title' => 'privacy:metadata:report_ai_analysis_reports:title',
+                'scope_details' => 'privacy:metadata:report_ai_analysis_reports:scope_details',
                 'prompt' => 'privacy:metadata:report_ai_analysis_reports:prompt',
                 'ai_result' => 'privacy:metadata:report_ai_analysis_reports:ai_result',
                 'raw_data' => 'privacy:metadata:report_ai_analysis_reports:raw_data',
+                'ai_model_name' => 'privacy:metadata:report_ai_analysis_reports:ai_model_name',
+                'status' => 'privacy:metadata:report_ai_analysis_reports:status',
                 'error_message' => 'privacy:metadata:report_ai_analysis_reports:error_message',
                 'error_details' => 'privacy:metadata:report_ai_analysis_reports:error_details',
                 'error_code' => 'privacy:metadata:report_ai_analysis_reports:error_code',
+                'execution_time' => 'privacy:metadata:report_ai_analysis_reports:execution_time',
+                'token_usage' => 'privacy:metadata:report_ai_analysis_reports:token_usage',
+                'retry_count' => 'privacy:metadata:report_ai_analysis_reports:retry_count',
+                'runversion' => 'privacy:metadata:report_ai_analysis_reports:runversion',
+                'action' => 'privacy:metadata:report_ai_analysis_reports:action',
+                'resultformat' => 'privacy:metadata:report_ai_analysis_reports:resultformat',
+                'truncated' => 'privacy:metadata:report_ai_analysis_reports:truncated',
+                'legacydata' => 'privacy:metadata:report_ai_analysis_reports:legacydata',
                 'timecreated' => 'privacy:metadata:report_ai_analysis_reports:timecreated',
+                'timemodified' => 'privacy:metadata:report_ai_analysis_reports:timemodified',
+                'timecompleted' => 'privacy:metadata:report_ai_analysis_reports:timecompleted',
             ],
             'privacy:metadata:report_ai_analysis_reports'
+        );
+
+        $collection->add_database_table(
+            'report_ai_analysis_users',
+            [
+                'reportid' => 'privacy:metadata:report_ai_analysis_users:reportid',
+                'userid' => 'privacy:metadata:report_ai_analysis_users:userid',
+                'source_data' => 'privacy:metadata:report_ai_analysis_users:source_data',
+                'ai_result' => 'privacy:metadata:report_ai_analysis_users:ai_result',
+            ],
+            'privacy:metadata:report_ai_analysis_users'
+        );
+
+        $collection->add_plugintype_link(
+            'local_ai_manager',
+            [
+                'userid' => 'privacy:metadata:local_ai_manager:userid',
+                'contextid' => 'privacy:metadata:local_ai_manager:contextid',
+                'itemid' => 'privacy:metadata:local_ai_manager:itemid',
+                'prompttext' => 'privacy:metadata:local_ai_manager:prompttext',
+                'promptcompletion' => 'privacy:metadata:local_ai_manager:promptcompletion',
+                'requestoptions' => 'privacy:metadata:local_ai_manager:requestoptions',
+                'timecreated' => 'privacy:metadata:local_ai_manager:timecreated',
+            ],
+            'privacy:metadata:local_ai_manager'
+        );
+
+        $collection->add_external_location_link(
+            'ai_service',
+            [
+                'prompt' => 'privacy:metadata:ai_service:prompt',
+                'source_data' => 'privacy:metadata:ai_service:source_data',
+            ],
+            'privacy:metadata:ai_service'
         );
 
         return $collection;
@@ -82,12 +134,14 @@ class provider implements
      */
     public static function get_contexts_for_userid(int $userid): contextlist {
         $contextlist = new contextlist();
+                $contextsql = self::privacy_context_sql();
+                $sql = "SELECT DISTINCT {$contextsql} AS id
+                                    FROM {report_ai_analysis_reports} r
+                                 WHERE r.userid = :ownerid OR EXISTS (
+                                               SELECT 1 FROM {report_ai_analysis_users} u
+                                                WHERE u.reportid = r.id AND u.userid = :subjectid)";
 
-        $sql = "SELECT DISTINCT contextid
-                  FROM {report_ai_analysis_reports}
-                 WHERE userid = :userid";
-
-        $contextlist->add_from_sql($sql, ['userid' => $userid]);
+        $contextlist->add_from_sql($sql, ['ownerid' => $userid, 'subjectid' => $userid]);
 
         return $contextlist;
     }
@@ -97,14 +151,23 @@ class provider implements
      *
      * @param userlist $userlist The userlist containing the list of users who have data in this context/plugin combination.
      */
-    public static function get_users_in_context(userlist $userlist) {
+    public static function get_users_in_context(userlist $userlist): void {
         $context = $userlist->get_context();
+        $contextsql = self::privacy_context_sql();
 
-        $sql = "SELECT userid
-                  FROM {report_ai_analysis_reports}
-                 WHERE contextid = :contextid";
+        $sql = "SELECT r.userid
+                  FROM {report_ai_analysis_reports} r
+                 WHERE {$contextsql} = :ownercontext
+                 UNION
+                SELECT u.userid
+                  FROM {report_ai_analysis_users} u
+                  JOIN {report_ai_analysis_reports} r ON r.id = u.reportid
+                 WHERE {$contextsql} = :subjectcontext";
 
-        $userlist->add_from_sql('userid', $sql, ['contextid' => $context->id]);
+        $userlist->add_from_sql('userid', $sql, [
+            'ownercontext' => $context->id,
+            'subjectcontext' => $context->id,
+        ]);
     }
 
     /**
@@ -112,62 +175,98 @@ class provider implements
      *
      * @param approved_contextlist $contextlist The approved contexts to export information for.
      */
-    public static function export_user_data(approved_contextlist $contextlist) {
+    public static function export_user_data(approved_contextlist $contextlist): void {
         global $DB;
 
-        if (empty($contextlist->count())) {
+        if ($contextlist->count() === 0) {
             return;
         }
 
         $user = $contextlist->get_user();
-        [$contextsql, $contextparams] = $DB->get_in_or_equal($contextlist->get_contextids(), SQL_PARAMS_NAMED);
+        [$contextsql, $contextparams] = $DB->get_in_or_equal($contextlist->get_contextids(), SQL_PARAMS_NAMED, 'ctx');
+        $privacycontext = self::privacy_context_sql();
 
-        $sql = "SELECT *
-                  FROM {report_ai_analysis_reports}
-                 WHERE userid = :userid
-                   AND contextid {$contextsql}
-              ORDER BY timecreated ASC";
+        // Never select the parent's combined result, raw data, scope or diagnostic text for an export.
+        $sql = "SELECT r.id, r.contextid, {$privacycontext} AS exportcontextid, r.userid, r.title, r.prompt,
+                   r.ai_model_name, r.status,
+                       r.error_code, r.execution_time, r.token_usage, r.retry_count,
+                       r.runversion, r.action, r.resultformat, r.truncated, r.legacydata,
+                       r.timecreated, r.timemodified, r.timecompleted, u.source_data, u.ai_result,
+                       (SELECT COUNT(*) FROM {report_ai_analysis_users} subjects
+                         WHERE subjects.reportid = r.id) AS subjectcount
+                  FROM {report_ai_analysis_reports} r
+             LEFT JOIN {report_ai_analysis_users} u ON u.reportid = r.id AND u.userid = :subjectid
+                 WHERE {$privacycontext} {$contextsql}
+                   AND (r.userid = :ownerid OR u.id IS NOT NULL)
+              ORDER BY r.timecreated ASC, r.id ASC";
 
-        $params = ['userid' => $user->id] + $contextparams;
+        $params = ['ownerid' => $user->id, 'subjectid' => $user->id] + $contextparams;
         $reports = $DB->get_records_sql($sql, $params);
 
         foreach ($reports as $report) {
-            $context = \context::instance_by_id($report->contextid);
-            $contextdata = \core_privacy\local\request\helper::get_context_data($context, $contextlist->get_user());
-
+            $context = context::instance_by_id($report->exportcontextid);
+            // An orphan's historical content cannot be authenticated as a separable current source.
+            $legacy = $report->legacydata || (int) $report->contextid !== (int) $report->exportcontextid;
             $data = [
-                'title' => $report->title,
-                'scope_details' => $report->scope_details,
-                'prompt' => $report->prompt,
-                'ai_model_name' => $report->ai_model_name,
+                'reportid' => (int) $report->id,
                 'status' => $report->status,
-                'ai_result' => $report->ai_result,
-                'raw_data' => $report->raw_data,
-                'error_message' => $report->status === 'failed' ?
-                    error_info::get_description($report->error_code ?? null) : null,
-                'error_code' => $report->error_code,
-                'execution_time' => $report->execution_time,
-                'token_usage' => $report->token_usage,
-                'retry_count' => $report->retry_count,
-                'timecreated' => \core_privacy\local\request\transform::datetime($report->timecreated),
-                'timemodified' => \core_privacy\local\request\transform::datetime($report->timemodified),
+                'source_data' => $legacy ? null : $report->source_data,
+                'ai_result' => $legacy ? null : $report->ai_result,
+                'shared_data' => get_string('privacy:export:shareddata', 'report_ai_analysis'),
+                'timecreated' => transform::datetime($report->timecreated),
+                'timemodified' => transform::datetime($report->timemodified),
                 'timecompleted' => $report->timecompleted ?
-                    \core_privacy\local\request\transform::datetime($report->timecompleted) : null,
+                    transform::datetime($report->timecompleted) : null,
             ];
 
-            writer::with_context($context)->export_data(['AI Analysis Reports', $report->id], (object) $data);
+            if ($legacy) {
+                $data['legacy_data'] = get_string('privacy:export:legacydata', 'report_ai_analysis');
+            }
+
+            if ((int) $report->userid === (int) $user->id) {
+                // Authorship does not authorise exporting other participants' source data or assessments.
+                $errorcode = error_info::is_user_error_code((string) $report->error_code) ? $report->error_code : null;
+                $data += [
+                    'title' => $report->title,
+                    'prompt' => $report->prompt,
+                    'ai_model_name' => $report->ai_model_name,
+                    'subject_count' => (int) $report->subjectcount,
+                    'error_message' => $report->status === 'failed' ? error_info::get_description($errorcode) : null,
+                    'error_code' => $errorcode,
+                    'execution_time' => (int) $report->execution_time,
+                    'token_usage' => $report->token_usage,
+                    'retry_count' => (int) $report->retry_count,
+                    'runversion' => (int) $report->runversion,
+                    'action' => $report->action,
+                    'resultformat' => (int) $report->resultformat,
+                    'truncated' => (bool) $report->truncated,
+                ];
+            }
+
+            writer::with_context($context)->export_data(
+                [get_string('privacy:export:reports', 'report_ai_analysis'), (string) $report->id],
+                (object) $data
+            );
         }
     }
 
     /**
      * Delete all data for all users in the specified context.
      *
-     * @param \context $context The specific context to delete data for.
+     * @param context $context The specific context to delete data for.
      */
-    public static function delete_data_for_all_users_in_context(\context $context) {
+    public static function delete_data_for_all_users_in_context(context $context): void {
         global $DB;
 
-        $DB->delete_records('report_ai_analysis_reports', ['contextid' => $context->id]);
+        $privacycontext = self::privacy_context_sql();
+        $reportids = $DB->get_fieldset_sql("SELECT r.id FROM {report_ai_analysis_reports} r
+            WHERE {$privacycontext} = :contextid", ['contextid' => $context->id]);
+        foreach ($reportids as $reportid) {
+            report_manager::delete_for_privacy((int) $reportid);
+        }
+
+        // Also cover unlinked legacy logs and logs whose parent no longer exists, in this context only.
+        log_store::anonymize_context((int) $context->id);
     }
 
     /**
@@ -175,20 +274,8 @@ class provider implements
      *
      * @param approved_contextlist $contextlist The approved contexts and user information to delete information for.
      */
-    public static function delete_data_for_user(approved_contextlist $contextlist) {
-        global $DB;
-
-        if (empty($contextlist->count())) {
-            return;
-        }
-
-        $user = $contextlist->get_user();
-        [$contextsql, $contextparams] = $DB->get_in_or_equal($contextlist->get_contextids(), SQL_PARAMS_NAMED);
-
-        $select = "userid = :userid AND contextid {$contextsql}";
-        $params = ['userid' => $user->id] + $contextparams;
-
-        $DB->delete_records_select('report_ai_analysis_reports', $select, $params);
+    public static function delete_data_for_user(approved_contextlist $contextlist): void {
+        self::delete_reports_for_users($contextlist->get_contextids(), [(int) $contextlist->get_user()->id]);
     }
 
     /**
@@ -196,21 +283,60 @@ class provider implements
      *
      * @param approved_userlist $userlist The approved context and user information to delete information for.
      */
-    public static function delete_data_for_users(approved_userlist $userlist) {
+    public static function delete_data_for_users(approved_userlist $userlist): void {
+        self::delete_reports_for_users([(int) $userlist->get_context()->id], $userlist->get_userids());
+    }
+
+    /**
+     * Delete inseparable reports through the locked lifecycle, within the approved contexts only.
+     *
+     * @param int[] $contextids Approved context IDs
+     * @param int[] $userids Approved subject or creator IDs
+     */
+    private static function delete_reports_for_users(array $contextids, array $userids): void {
         global $DB;
 
-        $context = $userlist->get_context();
-        $userids = $userlist->get_userids();
-
-        if (empty($userids)) {
+        if (!$contextids || !$userids) {
             return;
         }
 
-        [$usersql, $userparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED);
+        [$contextsql, $contextparams] = $DB->get_in_or_equal($contextids, SQL_PARAMS_NAMED, 'ctx');
+        [$ownersql, $ownerparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'owner');
+        [$subjectsql, $subjectparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'subject');
+        $privacycontext = self::privacy_context_sql();
+        $sql = "SELECT r.id
+                  FROM {report_ai_analysis_reports} r
+             WHERE {$privacycontext} {$contextsql}
+                   AND (r.userid {$ownersql}
+                        OR EXISTS (SELECT 1
+                                     FROM {report_ai_analysis_users} u
+                                    WHERE u.reportid = r.id AND u.userid {$subjectsql}))";
+        $reportids = $DB->get_fieldset_sql($sql, $contextparams + $ownerparams + $subjectparams);
 
-        $select = "contextid = :contextid AND userid {$usersql}";
-        $params = ['contextid' => $context->id] + $userparams;
+        foreach ($reportids as $reportid) {
+            report_manager::delete_for_privacy((int) $reportid);
+        }
+    }
 
-        $DB->delete_records_select('report_ai_analysis_reports', $select, $params);
+    /**
+     * Route orphan discovery through the system context without reparenting or deleting history.
+     *
+     * Missing contexts and course contexts whose course vanished cannot appear in a core contextlist.
+     * The system context is an explicit privacy fallback, never an interactive report-access grant.
+     * Only its approval permits orphan export/deletion; valid existing contexts remain independent.
+     * The report keeps its original context ID so linked manager logs can still be anonymised.
+     *
+     * @return string SQL expression for report alias r, using trusted core constants only
+     */
+    private static function privacy_context_sql(): string {
+        $systemid = (int) \context_system::instance()->id;
+        $courselevel = CONTEXT_COURSE;
+        return "CASE WHEN EXISTS (
+                    SELECT 1 FROM {context} originalctx
+                    LEFT JOIN {course} originalcourse ON originalcourse.id = originalctx.instanceid
+                         AND originalctx.contextlevel = {$courselevel}
+                    WHERE originalctx.id = r.contextid
+                      AND (originalctx.contextlevel <> {$courselevel} OR originalcourse.id IS NOT NULL)
+                ) THEN r.contextid ELSE {$systemid} END";
     }
 }
